@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import tkinter as tk
 from functools import wraps
@@ -13,11 +15,71 @@ with open('settings.json') as settings:
 root = tk.Tk()
 root.config(bg=settings.ROOT_BG)
 root.geometry('800x500')
+root.resizable(False, False)
 root.title('Easy-Python: Учить Python легко!')
 
 
+class Alert:
+    """
+    Виджет, показывающий сообщение на экран
+    """
+
+    alert_frame = tk.Frame(root, bg=settings.ROOT_BG)
+    alert: Alert = None
+
+    def __init__(self, message, *, can_hide=True, show_time=5):
+        """
+        :param message: Текст, который отобразится.
+        :param can_hide:
+            Для True - Сообщение само скроется через 5 секунд.
+            Для False - Сообщение будет висеть постоянно.
+        """
+
+        for lb in Alert.alert_frame.winfo_children():
+            lb.destroy()
+
+        self.can_hide = can_hide
+        self.alert_frame = tk.Frame(Alert.alert_frame, bg=settings.CONSP_BG)
+        self.alert_lb = tk.Label(
+            self.alert_frame, text=message,
+            bg=settings.CONSP_BG, fg=settings.CONSP_FG
+        )
+
+        self.alert_frame.pack(fill=tk.X)
+        self.alert_lb.pack()
+
+        if can_hide:
+            root.after(show_time * 1000, self.destroy)
+
+    def destroy(self):
+        """
+        Удаляет сообщение
+        """
+
+        self.alert_frame.destroy()
+        self.alert_lb.destroy()
+        Alert.alert_frame.update()
+        del self
+        Alert.alert = None
+
+    @classmethod
+    def show(cls, message: str, *, can_hide=True, show_time=5):
+        """
+        Показывает сообщение ```message```
+        """
+
+        if cls.alert:
+            if cls.alert.can_hide is False:
+                return
+            cls.alert.destroy()
+
+        cls.alert = Alert(message, can_hide=can_hide, show_time=show_time)
+
+
 def open_img(path: str, size: tuple = (80, 50)) -> ImageTk.PhotoImage:
-    """ Открытие изображения """
+    """
+    Открытие изображения
+    """
 
     img = Image.open(f'{path}')
     img.thumbnail(size, Image.ANTIALIAS)
@@ -60,33 +122,25 @@ def log_in_view():
     Страница авторизации.
     """
 
-    root.geometry('350x400')
-    root.minsize(350, 400)
+    root.geometry('350x420')
     root.title('Авторизация')
-    frame_main = tk.Frame(bg=settings.ROOT_BG, bd=10)
+    frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
 
-    frame_user_name = tk.Frame(frame_main, bg=settings.ROOT_BG)
-    frame_lb_user_name = tk.Frame(frame_user_name, bg=settings.ROOT_BG)
+    frame_login = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
-    lb_user_name1 = tk.Label(
-        frame_lb_user_name, text='Логин', fg=settings.ROOT_FG,
+    lb_login = tk.Label(
+        frame_login, text='Логин', fg=settings.ROOT_FG,
         bg=settings.ROOT_BG, font=settings.FONT
     )
-    lb_user_name2 = tk.Label(
-        frame_lb_user_name, text='(Имя пользователя)', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.SMALL_FONT
-    )
 
-    entry_user_name = tk.Entry(
-        frame_user_name, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
+    entry_login = tk.Entry(
+        frame_login, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
         font=settings.FONT, relief=tk.FLAT, width=27
     )
 
-    lb_user_name1.grid(row=0, column=0)
-    lb_user_name2.grid(row=0, column=1, sticky=tk.SE)
-    frame_lb_user_name.grid(row=0, column=0)
-    entry_user_name.grid(row=1, column=0, columnspan=100, sticky=tk.W)
-    frame_user_name.pack()
+    lb_login.grid(row=0, column=0)
+    entry_login.grid(row=1, column=0, columnspan=100, sticky=tk.W)
+    frame_login.pack()
 
     frame_password = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
@@ -128,11 +182,16 @@ def log_in_view():
 
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
 
-    entry_user_name.focus()
+    entry_login.focus()
     _locals = locals()
 
     btn_sign_in.bind('<Button-1>', lambda event: sign_in_view(_locals))
-    root.bind_all('<Return>')
+    root.bind_all('<Return>', lambda event: log_in(
+        interface, _locals, entry_login.get(), entry_password.get()
+    ))
+    btn_log_in.bind('<Button-1>', lambda event: log_in(
+        interface, _locals, entry_login.get(), entry_password.get()
+    ))
 
 
 @view
@@ -141,27 +200,26 @@ def sign_in_view():
     Страница регистрации.
     """
 
-    root.geometry('350x400')
-    root.minsize(350, 400)
+    root.geometry('350x420')
     root.title('Регистрация')
 
-    frame_main = tk.Frame(bg=settings.ROOT_BG, bd=10)
+    frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
 
-    frame_user_name = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    frame_login = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
-    lb_user_name1 = tk.Label(
-        frame_user_name, text='Имя пользователя', fg=settings.ROOT_FG,
+    lb_login = tk.Label(
+        frame_login, text='Имя пользователя', fg=settings.ROOT_FG,
         bg=settings.ROOT_BG, font=settings.FONT
     )
 
-    entry_user_name = tk.Entry(
-        frame_user_name, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
+    entry_login = tk.Entry(
+        frame_login, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
         font=settings.FONT, relief=tk.FLAT, width=27
     )
 
-    lb_user_name1.grid(row=0, column=0)
-    entry_user_name.grid(row=1, column=0, columnspan=100, sticky=tk.W)
-    frame_user_name.pack()
+    lb_login.grid(row=0, column=0)
+    entry_login.grid(row=1, column=0, columnspan=100, sticky=tk.W)
+    frame_login.pack()
 
     frame_password = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
@@ -215,13 +273,40 @@ def sign_in_view():
 
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
 
-    entry_user_name.focus()
+    entry_login.focus()
     _locals = locals()
 
     btn_log_in.bind('<Button-1>', lambda event: log_in_view(_locals))
-    root.bind_all('<Return>')
+    root.bind_all('<Return>', lambda event: sign_in(
+        interface, _locals, entry_login.get(),
+        entry_password.get(), entry_password2.get()
+    ))
+    btn_sign_in.bind('<Button-1>', lambda event: sign_in(
+        interface, _locals, entry_login.get(),
+        entry_password.get(), entry_password2.get()
+    ))
+
+
+@view
+def home_view():
+    """
+    Главная страница приложения.
+    Страница выбора темы.
+    """
+
+    root.title('Easy-Python: Учить Python легко!')
+    root.geometry('800x500')
+    root.minsize(650, 400)
+    root.resizable(True, True)
+
+    print('Вы на главной, но тут ничего нет')
+    lb = tk.Label(
+        bg=settings.ROOT_BG, font=settings.BIG_FONT, fg=settings.ROOT_FG,
+        text='Вы на главной, но тут ничего нет'
+    )
+    lb.pack(pady=50)
 
 
 if __name__ == '__main__':
-    sign_in_view()
+    home_view()
     root.mainloop()
