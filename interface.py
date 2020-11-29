@@ -5,7 +5,6 @@ import tkinter as tk
 from functools import wraps
 
 from PIL import ImageTk, Image
-from attrdict import AttrMap
 
 from main import *
 
@@ -13,6 +12,8 @@ with open('settings.json') as settings:
     settings = AttrMap(json.load(settings))
 
 root = tk.Tk()
+interface = ...
+profile = ...
 root.config(bg=settings.ROOT_BG)
 root.geometry('800x500')
 root.resizable(False, False)
@@ -88,14 +89,12 @@ def open_img(path: str, size: tuple = (80, 50)) -> ImageTk.PhotoImage:
 
 # Подгрузка всех изображений
 try:
-    if not settings.USE_PICTURES:
-        raise RuntimeError
 
     dp = 'sources/images/'
     IMG_LOG_IN = open_img(dp + 'btn_log_in.png', size=(150, 70))
     IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(150, 70))
 
-except (RuntimeError, FileNotFoundError):
+except FileNotFoundError:
     settings.USE_PICTURES = False
 
 
@@ -122,54 +121,48 @@ def log_in_view():
     Страница авторизации.
     """
 
-    root.geometry('350x420')
+    root.geometry('620x465')
     root.title('Авторизация')
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
 
-    frame_login = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    frame_input = tk.Frame(frame_main, bg=settings.SECONDARY_BG, bd=35)
 
     lb_login = tk.Label(
-        frame_login, text='Логин', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        frame_input, text='Логин', fg=settings.ROOT_FG,
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_login = tk.Entry(
-        frame_login, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
-        font=settings.FONT, relief=tk.FLAT, width=27
+        frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightbackground=settings.CONSP_BG, font=settings.FONT,
+        relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=25
     )
 
-    lb_login.grid(row=0, column=0)
-    entry_login.grid(row=1, column=0, columnspan=100, sticky=tk.W)
-    frame_login.pack()
-
-    frame_password = tk.Frame(frame_main, bg=settings.ROOT_BG)
-
     lb_password = tk.Label(
-        frame_password, text='Пароль', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        frame_input, text='Пароль', fg=settings.ROOT_FG,
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_password = tk.Entry(
-        frame_password, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
-        font=settings.FONT, relief=tk.FLAT, show='*', width=27
+        frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightbackground=settings.CONSP_BG, font=settings.FONT,
+        relief=tk.FLAT, insertbackground=settings.ROOT_FG,
+        show='*', width=25
     )
 
-    lb_password.grid(row=0, column=0, sticky=tk.W)
-    entry_password.grid(row=1, column=0, columnspan=100, sticky=tk.W)
-    frame_password.pack(pady=20)
+    lb_login.grid(row=0, column=0, sticky=tk.E)
+    entry_login.grid(row=0, column=1, sticky=tk.W, padx=10)
+    lb_password.grid(row=1, column=0, sticky=tk.E, pady=15)
+    entry_password.grid(row=1, column=1, sticky=tk.W, pady=15, padx=10)
+    frame_input.pack(pady=15)
 
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
-    if not settings.USE_PICTURES:
-        btn_log_in = tk.Button(
-            frame_btns, text='Войти',
-            bg=settings.CONSP_BG, activebackground='#f3a505',
-            fg=settings.CONSP_FG, padx=15, font=settings.FONT
-        )
-    else:
-        btn_log_in = tk.Label(
-            frame_btns, image=IMG_LOG_IN, bg=settings.ROOT_BG
-        )
+    btn_log_in = tk.Label(
+        frame_btns, image=IMG_LOG_IN, bg=settings.ROOT_BG
+    )
 
     btn_sign_in = tk.Label(
         frame_btns, text='Зарегистрироваться', font=settings.SMALL_FONT,
@@ -200,67 +193,64 @@ def sign_in_view():
     Страница регистрации.
     """
 
-    root.geometry('350x420')
+    root.geometry('620x465')
     root.title('Регистрация')
 
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
 
-    frame_login = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    frame_input = tk.Frame(frame_main, bg=settings.SECONDARY_BG, bd=35)
 
     lb_login = tk.Label(
-        frame_login, text='Имя пользователя', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        frame_input, text='Имя пользователя', fg=settings.ROOT_FG,
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_login = tk.Entry(
-        frame_login, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
-        font=settings.FONT, relief=tk.FLAT, width=27
+        frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightbackground=settings.CONSP_BG, font=settings.FONT,
+        relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=25
     )
 
-    lb_login.grid(row=0, column=0)
-    entry_login.grid(row=1, column=0, columnspan=100, sticky=tk.W)
-    frame_login.pack()
-
-    frame_password = tk.Frame(frame_main, bg=settings.ROOT_BG)
-
     lb_password = tk.Label(
-        frame_password, text='Пароль', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        frame_input, text='Пароль', fg=settings.ROOT_FG,
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_password = tk.Entry(
-        frame_password, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
-        font=settings.FONT, relief=tk.FLAT, show='*', width=27
+        frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightbackground=settings.CONSP_BG, font=settings.FONT,
+        relief=tk.FLAT, insertbackground=settings.ROOT_FG,
+        show='*', width=25
     )
 
     lb_password2 = tk.Label(
-        frame_password, text='Повторите пароль', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        frame_input, text='Повторите пароль', fg=settings.ROOT_FG,
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_password2 = tk.Entry(
-        frame_password, bg=settings.ROOT_FG, fg=settings.ROOT_BG,
-        font=settings.FONT, relief=tk.FLAT, show='*', width=27
+        frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightbackground=settings.CONSP_BG, font=settings.FONT,
+        relief=tk.FLAT, insertbackground=settings.ROOT_FG,
+        show='*', width=25
     )
 
-    lb_password.grid(row=0, column=0, sticky=tk.W)
-    entry_password.grid(row=1, column=0, columnspan=100, sticky=tk.W)
-    lb_password2.grid(row=2, column=0, sticky=tk.W)
-    entry_password2.grid(row=3, column=0, columnspan=100, sticky=tk.W)
-    frame_password.pack(pady=20)
+    lb_login.grid(row=0, column=0, sticky=tk.E)
+    entry_login.grid(row=0, column=1, sticky=tk.SW, padx=10)
+    lb_password.grid(row=1, column=0, sticky=tk.E, pady=15)
+    entry_password.grid(row=1, column=1, sticky=tk.SW, pady=15, padx=10)
+    lb_password2.grid(row=2, column=0, sticky=tk.E)
+    entry_password2.grid(row=2, column=1, sticky=tk.SW, padx=10)
+    frame_input.pack(pady=15)
 
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
-    if not settings.USE_PICTURES:
-        btn_sign_in = tk.Button(
-            frame_btns, text='Создать профиль',
-            bg=settings.CONSP_BG, activebackground='#f3a505',
-            fg=settings.CONSP_FG, padx=15, font=settings.FONT
-        )
-    else:
-        btn_sign_in = tk.Label(
-            frame_btns, image=IMG_SIGN_IN, bg=settings.ROOT_BG
-        )
+    btn_sign_in = tk.Label(
+        frame_btns, image=IMG_SIGN_IN, bg=settings.ROOT_BG
+    )
 
     btn_log_in = tk.Label(
         frame_btns, text='Войти в существующий профиль',
@@ -294,19 +284,74 @@ def home_view():
     Страница выбора темы.
     """
 
+    Alert.alert_frame.destroy()
+
     root.title('Easy-Python: Учить Python легко!')
     root.geometry('800x500')
     root.minsize(650, 400)
     root.resizable(True, True)
 
-    print('Вы на главной, но тут ничего нет')
-    lb = tk.Label(
-        bg=settings.ROOT_BG, font=settings.BIG_FONT, fg=settings.ROOT_FG,
-        text='Вы на главной, но тут ничего нет'
+    frame_main = tk.Frame(bg=settings.ROOT_BG)
+
+    frame_tools = tk.Frame(frame_main, bg=settings.SECONDARY_BG, bd=10)
+
+    frame_profile = tk.Frame(frame_tools, bg=settings.SECONDARY_BG)
+    frame_profile_lbs = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
+
+    profile_icon = tk.Canvas(frame_profile, width=50, height=50, bg='#FFF')
+    profile_name = tk.Label(
+        frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        font=settings.FONT, text=LOGIN
     )
-    lb.pack(pady=50)
+    profile_score = tk.Label(
+        frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        font=settings.SMALL_FONT, text=f'Счёт: {profile.score}'
+    )
+
+    profile_icon.pack(side=tk.LEFT)
+    profile_name.grid(row=0, column=0, sticky=tk.EW)
+    profile_score.grid(row=1, column=0, sticky=tk.NW)
+    frame_profile_lbs.pack(padx=10)
+    frame_profile.pack(side=tk.TOP)
+
+    frame_filters = tk.Frame(frame_tools, bg=settings.SECONDARY_BG)
+    frame_filters.pack(fill=tk.Y)
+
+    frame_tools.pack(side=tk.LEFT, fill=tk.Y)
+
+    frame_quests = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    Alert.alert_frame = tk.Frame(frame_quests, bg=settings.ROOT_BG)
+    Alert.alert_frame.pack(side='top', fill='x')
+    Alert.show('Подготовка...', show_time=1)
+
+    frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
+
+    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
 
 
-if __name__ == '__main__':
-    home_view()
-    root.mainloop()
+@view
+def connection_error_view(error_info: str = ''):
+    """
+    Окно, сообщающее об ошибке подключения к серверу
+    """
+
+    root.geometry('560x420')
+    root.title('Ошибка соединения')
+
+    frame_main = tk.Frame(bg=settings.ROOT_BG)
+    lb1 = tk.Label(
+        frame_main, text=f'Нет связи с сервером.',
+        bg=settings.ROOT_BG, fg=settings.ROOT_FG, font=settings.BIG_FONT
+    )
+    lb2 = tk.Label(
+        frame_main, text=error_info,
+        bg=settings.ROOT_BG, fg=settings.ROOT_FG, font=settings.SMALL_FONT
+    )
+
+    lb1.pack()
+    lb2.pack()
+    frame_main.pack(pady=100)
+
+    _locals = locals()
+
+    root.after(5000, lambda: reconnection(interface, _locals))

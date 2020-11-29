@@ -3,10 +3,17 @@ import subprocess
 from typing import Any
 
 import requests
+from attrdict import AttrMap
 
 # HOST = 'http://127.0.0.1:5000/'
 HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
+
+if os.path.exists('.auth'):
+    with open('.auth') as file:
+        LOGIN, PASSWORD = file.read().split('::')
+else:
+    LOGIN, PASSWORD = None, None
 
 
 def request(path: str, **kwargs) -> dict:
@@ -27,6 +34,21 @@ def request(path: str, **kwargs) -> dict:
     )).json()
 
 
+def reconnection(root: Any, _locals: dict):
+    """
+    Повторная попытка подключиться к серверу.
+    """
+
+    _locals['lb2'].config(text='Подключение...')
+    _locals['lb2'].update()
+
+    try:
+        _main(root, _locals)
+    except (requests.ConnectionError, requests.HTTPError):
+        _locals['lb2'].config(text='')
+        root.root.after(5000, lambda: reconnection(root, _locals))
+
+
 def log_in(root: Any, _locals: dict, login: str, password: str):
     """
     Авторизация пользователя
@@ -45,6 +67,9 @@ def log_in(root: Any, _locals: dict, login: str, password: str):
         with open('.auth', 'w') as data:
             data.write(f'{login}::{password}')
         subprocess.check_call(['attrib', '+H', '.auth'])
+        root.profile = AttrMap(request(
+            f'profile/{login.split("#")[1]}'
+        ))
         root.home_view(_locals)
     else:
         root.Alert.show('Неправильный логин или пароль')
@@ -78,21 +103,39 @@ def sign_in(
         with open('.auth', 'w') as data:
             data.write(f'{response["login"]}::{password}')
         subprocess.check_call(['attrib', '+H', '.auth'])
+        root.profile = AttrMap(request(
+            f'profile/{response["login"].split("#")[1]}'
+        ))
         root.home_view(_locals)
+
+
+def _main(root: Any, _locals: dict = None):
+    if LOGIN and PASSWORD:
+        if request('auth', login=LOGIN, password=PASSWORD)['response']:
+            root.profile = AttrMap(request(
+                f'profile/{LOGIN.split("#")[1]}'
+            ))
+            root.home_view(_locals)
+        else:
+            os.remove('.auth')
+            root.log_in_view(_locals)
+    else:
+        request('test')
+        root.log_in_view(_locals)
 
 
 if __name__ == '__main__':
     import interface
+    interface.interface = interface
 
-    interface.Alert.alert_frame.pack(side='top', fill='x')
-    interface.Alert.show('Подготовка...', show_time=1)
+    if not LOGIN:
+        interface.Alert.alert_frame.pack(side='top', fill='x')
+        interface.Alert.show('Подготовка...', show_time=1)
 
     try:
-        request('test')
+        _main(interface)
     except (requests.ConnectionError, requests.HTTPError):
-        interface.Alert.show('Нет связи с сервером', can_hide=False)
+        interface.connection_error_view()
         SERVER_ALLOWED = False
 
-    interface.interface = interface
-    interface.log_in_view()
     interface.root.mainloop()
