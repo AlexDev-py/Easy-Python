@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import json
 import tkinter as tk
+from tkinter import ttk
 from functools import wraps
 
 from PIL import ImageTk, Image
 
 from main import *
 
+if __name__ == '__main__':
+    from sources.quests.quests import Quest
+
 with open('settings.json') as settings:
     settings = AttrMap(json.load(settings))
 
 root = tk.Tk()
+Quests: "Quests" = ...
 interface = ...
 profile = ...
 root.config(bg=settings.ROOT_BG)
@@ -77,6 +82,76 @@ class Alert:
         cls.alert = Alert(message, can_hide=can_hide, show_time=show_time)
 
 
+class ScrollableFrame(tk.Frame):
+    """
+    Прокручиваемый фрейм
+    """
+
+    def __init__(self, master):
+        super().__init__(master)
+
+        self._y = 0
+        self._move_count = 0
+
+        self.canvas = tk.Canvas(
+            self, bg=settings.ROOT_BG, highlightthickness=0
+        )
+        self.canvas.bind_all('<MouseWheel>', self.wheel_scroll)
+
+        self.scrollable_frame = tk.Frame(
+            self.canvas, bg=settings.CONSP_BG, bd=10
+        )
+        self.scrollable_frame.bind(
+            "<Configure>", lambda event:
+            self.canvas.configure(scrollregion=self.canvas.bbox(tk.ALL))
+        )
+        self.canvas.create_window(
+            (0, 0), window=self.scrollable_frame, anchor=tk.NW
+        )
+
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure(
+            'Vertical.TScrollbar', gripcount=0, backgroung=settings.CONSP_BG,
+            darkcolor=settings.ROOT_BG, lightcolor=settings.ROOT_BG,
+            troughcolor=settings.ROOT_BG, bordercolor=settings.ROOT_BG,
+            arrowcolor=settings.ROOT_BG
+        )
+
+        self.scrollbar = ttk.Scrollbar(
+            self, orient=tk.VERTICAL, command=self.canvas.yview
+        )
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+    def wheel_scroll(self, event):
+        """
+        Прокрутка колёсиком мыши
+        """
+
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), tk.UNITS)
+
+
+class QuestWidget(tk.Frame):
+    """
+    Виджет темы.
+    """
+
+    def __init__(self, master: tk.Frame, quest: "Quest"):
+        super().__init__(master, bg=settings.SECONDARY_BG, bd=20)
+        self.quest = quest
+        self.name = tk.Label(
+            self, text=quest.name,
+            bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+            font=settings.BIG_FONT
+        )
+
+        self.name.pack(side=tk.LEFT)
+        self.pack(fill=tk.X, pady=10)
+
+
 def open_img(path: str, size: tuple = (80, 50)) -> ImageTk.PhotoImage:
     """
     Открытие изображения
@@ -87,12 +162,45 @@ def open_img(path: str, size: tuple = (80, 50)) -> ImageTk.PhotoImage:
     return ImageTk.PhotoImage(img)
 
 
+def rounded_rect(canvas, x, y, width, height, radius):
+    """
+    Рисует прямоугольник с закруглёнными краями
+    """
+
+    canvas.create_arc(
+        x, y, x + 2 * radius, y + 2 * radius,
+        start=90, extent=90, style="arc", outline=settings.CONSP_BG)
+    canvas.create_arc(
+        x + width - 2 * radius, y + height - 2 * radius, x + width, y + height,
+        start=270, extent=90, style="arc", outline=settings.CONSP_BG)
+    canvas.create_arc(
+        x + width - 2 * radius, y, x + width, y + 2 * radius,
+        start=0, extent=90, style="arc", outline=settings.CONSP_BG)
+    canvas.create_arc(
+        x, y + height - 2 * radius, x + 2 * radius, y + height,
+        start=180, extent=90, style="arc", outline=settings.CONSP_BG)
+    canvas.create_line(
+        x + radius, y, x + width - radius, y, fill=settings.CONSP_BG
+    )
+    canvas.create_line(
+        x + radius, y + height, x + width - radius, y + height,
+        fill=settings.CONSP_BG
+    )
+    canvas.create_line(
+        x, y + radius, x, y + height - radius, fill=settings.CONSP_BG
+    )
+    canvas.create_line(
+        x + width, y + height - radius, x + width, y + radius,
+        fill=settings.CONSP_BG
+    )
+
+
 # Подгрузка всех изображений
 try:
 
     dp = 'sources/images/'
-    IMG_LOG_IN = open_img(dp + 'btn_log_in.png', size=(150, 70))
-    IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(150, 70))
+    IMG_LOG_IN = open_img(dp + 'btn_log_in.png', size=(160, 60))
+    IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(180, 70))
 
 except FileNotFoundError:
     settings.USE_PICTURES = False
@@ -112,6 +220,7 @@ def view(func):
                     obj.destroy()
         # Запуск новой страницы
         func(*args, **kwargs)
+
     return _wrap
 
 
@@ -125,28 +234,33 @@ def log_in_view():
     root.title('Авторизация')
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
 
-    frame_input = tk.Frame(frame_main, bg=settings.SECONDARY_BG, bd=35)
+    canvas_input = tk.Canvas(
+        frame_main, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    canvas_input.pack()
+
+    frame_input = tk.Frame(canvas_input, bg=settings.ROOT_BG, bd=10)
 
     lb_login = tk.Label(
         frame_input, text='Логин', fg=settings.ROOT_FG,
-        bg=settings.SECONDARY_BG, font=settings.FONT
+        bg=settings.ROOT_BG, font=settings.FONT
     )
 
     entry_login = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
         relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=25
     )
 
     lb_password = tk.Label(
         frame_input, text='Пароль', fg=settings.ROOT_FG,
-        bg=settings.SECONDARY_BG, font=settings.FONT
+        bg=settings.ROOT_BG, font=settings.FONT
     )
 
     entry_password = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
         relief=tk.FLAT, insertbackground=settings.ROOT_FG,
         show='*', width=25
@@ -156,7 +270,11 @@ def log_in_view():
     entry_login.grid(row=0, column=1, sticky=tk.W, padx=10)
     lb_password.grid(row=1, column=0, sticky=tk.E, pady=15)
     entry_password.grid(row=1, column=1, sticky=tk.W, pady=15, padx=10)
-    frame_input.pack(pady=15)
+    frame_input.pack(pady=15, padx=25)
+    root.after(20, lambda: rounded_rect(
+        canvas_input, 0, 0,
+        canvas_input.winfo_width() - 1, canvas_input.winfo_height() - 1, 20
+    ))
 
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
@@ -198,44 +316,49 @@ def sign_in_view():
 
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
 
-    frame_input = tk.Frame(frame_main, bg=settings.SECONDARY_BG, bd=35)
+    canvas_input = tk.Canvas(
+        frame_main, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    canvas_input.pack()
+
+    frame_input = tk.Frame(canvas_input, bg=settings.ROOT_BG, bd=10)
 
     lb_login = tk.Label(
         frame_input, text='Имя пользователя', fg=settings.ROOT_FG,
-        bg=settings.SECONDARY_BG, font=settings.FONT
+        bg=settings.ROOT_BG, font=settings.FONT
     )
 
     entry_login = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
-        relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=25
+        relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=22
     )
 
     lb_password = tk.Label(
         frame_input, text='Пароль', fg=settings.ROOT_FG,
-        bg=settings.SECONDARY_BG, font=settings.FONT
+        bg=settings.ROOT_BG, font=settings.FONT
     )
 
     entry_password = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
         relief=tk.FLAT, insertbackground=settings.ROOT_FG,
-        show='*', width=25
+        show='*', width=22
     )
 
     lb_password2 = tk.Label(
         frame_input, text='Повторите пароль', fg=settings.ROOT_FG,
-        bg=settings.SECONDARY_BG, font=settings.FONT
+        bg=settings.ROOT_BG, font=settings.FONT
     )
 
     entry_password2 = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        highlightthickness=2, highlightcolor=settings.CONSP_BG,
+        highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
         relief=tk.FLAT, insertbackground=settings.ROOT_FG,
-        show='*', width=25
+        show='*', width=22
     )
 
     lb_login.grid(row=0, column=0, sticky=tk.E)
@@ -244,7 +367,11 @@ def sign_in_view():
     entry_password.grid(row=1, column=1, sticky=tk.SW, pady=15, padx=10)
     lb_password2.grid(row=2, column=0, sticky=tk.E)
     entry_password2.grid(row=2, column=1, sticky=tk.SW, padx=10)
-    frame_input.pack(pady=15)
+    frame_input.pack(pady=15, padx=15)
+    root.after(20, lambda: rounded_rect(
+        canvas_input, 0, 0,
+        canvas_input.winfo_width() - 1, canvas_input.winfo_height() - 1, 20
+    ))
 
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
@@ -259,9 +386,9 @@ def sign_in_view():
 
     btn_log_in.pack(side=tk.BOTTOM)
     btn_sign_in.pack(side=tk.BOTTOM)
-    frame_btns.pack(pady=15)
+    frame_btns.pack(pady=55)
 
-    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
+    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=15)
 
     entry_login.focus()
     _locals = locals()
@@ -319,14 +446,22 @@ def home_view():
 
     frame_tools.pack(side=tk.LEFT, fill=tk.Y)
 
-    frame_quests = tk.Frame(frame_main, bg=settings.ROOT_BG)
-    Alert.alert_frame = tk.Frame(frame_quests, bg=settings.ROOT_BG)
+    frame_content = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    Alert.alert_frame = tk.Frame(frame_content, bg=settings.ROOT_BG)
     Alert.alert_frame.pack(side='top', fill='x')
     Alert.show('Подготовка...', show_time=1)
 
+    frame_quests = ScrollableFrame(frame_content)
+    quests = [QuestWidget(
+        frame_quests.scrollable_frame, q
+    ) for q in Quests.quests]
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
 
+    frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
+
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
+
+    print(Quests.quests)
 
 
 @view

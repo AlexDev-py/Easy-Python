@@ -5,8 +5,8 @@ from typing import Any
 import requests
 from attrdict import AttrMap
 
-# HOST = 'http://127.0.0.1:5000/'
-HOST = 'http://easypython.pythonanywhere.com/'
+HOST = 'http://127.0.0.1:5000/'
+# HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
 
 if os.path.exists('.auth'):
@@ -67,6 +67,7 @@ def log_in(root: Any, _locals: dict, login: str, password: str):
         with open('.auth', 'w') as data:
             data.write(f'{login}::{password}')
         subprocess.check_call(['attrib', '+H', '.auth'])
+        root.LOGIN = login
         root.profile = AttrMap(request(
             f'profile/{login.split("#")[1]}'
         ))
@@ -103,6 +104,7 @@ def sign_in(
         with open('.auth', 'w') as data:
             data.write(f'{response["login"]}::{password}')
         subprocess.check_call(['attrib', '+H', '.auth'])
+        root.LOGIN = response['login']
         root.profile = AttrMap(request(
             f'profile/{response["login"].split("#")[1]}'
         ))
@@ -126,6 +128,9 @@ def _main(root: Any, _locals: dict = None):
 
 if __name__ == '__main__':
     import interface
+    from sources.quests.quests import Quests
+
+    interface.Quests = Quests
     interface.interface = interface
 
     if not LOGIN:
