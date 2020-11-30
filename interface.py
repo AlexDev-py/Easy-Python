@@ -39,6 +39,7 @@ class Alert:
         :param can_hide:
             Для True - Сообщение само скроется через 5 секунд.
             Для False - Сообщение будет висеть постоянно.
+        :param show_time: Длительность показа сообщения.
         """
 
         for lb in Alert.alert_frame.winfo_children():
@@ -99,14 +100,14 @@ class ScrollableFrame(tk.Frame):
         self.canvas.bind_all('<MouseWheel>', self.wheel_scroll)
 
         self.scrollable_frame = tk.Frame(
-            self.canvas, bg=settings.CONSP_BG, bd=10
+            self.canvas, bg=settings.ROOT_BG, bd=10
         )
         self.scrollable_frame.bind(
-            "<Configure>", lambda event:
+            '<Configure>', lambda event:
             self.canvas.configure(scrollregion=self.canvas.bbox(tk.ALL))
         )
-        self.canvas.create_window(
-            (0, 0), window=self.scrollable_frame, anchor=tk.NW
+        self._scrollable_frame = self.canvas.create_window(
+            0, 0, window=self.scrollable_frame, anchor=tk.NW
         )
 
         style = ttk.Style()
@@ -126,6 +127,10 @@ class ScrollableFrame(tk.Frame):
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
+        self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfig(
+            self._scrollable_frame, width=event.width
+        ))
+
     def wheel_scroll(self, event):
         """
         Прокрутка колёсиком мыши
@@ -134,31 +139,55 @@ class ScrollableFrame(tk.Frame):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), tk.UNITS)
 
 
-class QuestWidget(tk.Frame):
+class QuestWidget(tk.Canvas):
     """
     Виджет темы.
     """
 
     def __init__(self, master: tk.Frame, quest: "Quest"):
-        super().__init__(master, bg=settings.SECONDARY_BG, bd=20)
+        super().__init__(master, bg=settings.ROOT_BG, highlightthickness=0)
+
+        self._img_dark_zone = Images.IMG_DARK_ZONE
+        self.dark_zone = self.create_image(0, 0, image=self._img_dark_zone)
+
+        self.bind('<Configure>', self._create_dark_zone)
+
         self.quest = quest
+        self.frame = tk.Frame(self, bg=settings.SECONDARY_BG, bd=5)
         self.name = tk.Label(
-            self, text=quest.name,
+            self.frame, text=quest.name,
             bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
             font=settings.BIG_FONT
         )
 
         self.name.pack(side=tk.LEFT)
+        self.frame.pack(fill=tk.X, padx=10, pady=10)
         self.pack(fill=tk.X, pady=10)
 
+    def _create_dark_zone(self, event):
+        w, h = event.width, event.height
+        self._img_dark_zone = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(w, h), proportions=False
+        )
+        self.coords(self.dark_zone, w / 2, h / 2)
+        self.itemconfig(self.dark_zone, image=self._img_dark_zone)
 
-def open_img(path: str, size: tuple = (80, 50)) -> ImageTk.PhotoImage:
+
+def open_img(
+        path: str, size: tuple = (80, 50),
+        proportions=True, need_resize=True
+) -> ImageTk.PhotoImage:
     """
     Открытие изображения
     """
 
     img = Image.open(f'{path}')
-    img.thumbnail(size, Image.ANTIALIAS)
+    if need_resize:
+        if proportions:
+            img.thumbnail(size, Image.ANTIALIAS)
+        else:
+            img = img.resize(size, Image.ANTIALIAS)
     return ImageTk.PhotoImage(img)
 
 
@@ -195,15 +224,15 @@ def rounded_rect(canvas, x, y, width, height, radius):
     )
 
 
-# Подгрузка всех изображений
-try:
+class Images:
+    """
+    Все подгруженные изображения
+    """
 
     dp = 'sources/images/'
     IMG_LOG_IN = open_img(dp + 'btn_log_in.png', size=(160, 60))
     IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(180, 70))
-
-except FileNotFoundError:
-    settings.USE_PICTURES = False
+    IMG_DARK_ZONE = open_img(dp + 'dark_zone.png', need_resize=False)
 
 
 def view(func):
@@ -237,13 +266,14 @@ def log_in_view():
     canvas_input = tk.Canvas(
         frame_main, bg=settings.ROOT_BG, highlightthickness=0
     )
+    dark_zone = canvas_input.create_image(0, 0, image=Images.IMG_DARK_ZONE)
     canvas_input.pack()
 
-    frame_input = tk.Frame(canvas_input, bg=settings.ROOT_BG, bd=10)
+    frame_input = tk.Frame(canvas_input, bg=settings.SECONDARY_BG, bd=10)
 
     lb_login = tk.Label(
         frame_input, text='Логин', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_login = tk.Entry(
@@ -255,7 +285,7 @@ def log_in_view():
 
     lb_password = tk.Label(
         frame_input, text='Пароль', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_password = tk.Entry(
@@ -271,15 +301,22 @@ def log_in_view():
     lb_password.grid(row=1, column=0, sticky=tk.E, pady=15)
     entry_password.grid(row=1, column=1, sticky=tk.W, pady=15, padx=10)
     frame_input.pack(pady=15, padx=25)
-    root.after(20, lambda: rounded_rect(
-        canvas_input, 0, 0,
-        canvas_input.winfo_width() - 1, canvas_input.winfo_height() - 1, 20
-    ))
+
+    def _create_dark_zone(event):
+        w, h = event.width, event.height
+        Images.IMG_DARK_ZONE_LOG_IN = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(w, h), proportions=False
+        )
+        canvas_input.coords(dark_zone, w / 2, h / 2)
+        canvas_input.itemconfig(dark_zone, image=Images.IMG_DARK_ZONE_LOG_IN)
+
+    canvas_input.bind('<Configure>', _create_dark_zone)
 
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
     btn_log_in = tk.Label(
-        frame_btns, image=IMG_LOG_IN, bg=settings.ROOT_BG
+        frame_btns, image=Images.IMG_LOG_IN, bg=settings.ROOT_BG
     )
 
     btn_sign_in = tk.Label(
@@ -319,13 +356,14 @@ def sign_in_view():
     canvas_input = tk.Canvas(
         frame_main, bg=settings.ROOT_BG, highlightthickness=0
     )
+    dark_zone = canvas_input.create_image(0, 0, image=Images.IMG_DARK_ZONE)
     canvas_input.pack()
 
-    frame_input = tk.Frame(canvas_input, bg=settings.ROOT_BG, bd=10)
+    frame_input = tk.Frame(canvas_input, bg=settings.SECONDARY_BG, bd=10)
 
     lb_login = tk.Label(
         frame_input, text='Имя пользователя', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_login = tk.Entry(
@@ -337,7 +375,7 @@ def sign_in_view():
 
     lb_password = tk.Label(
         frame_input, text='Пароль', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_password = tk.Entry(
@@ -350,7 +388,7 @@ def sign_in_view():
 
     lb_password2 = tk.Label(
         frame_input, text='Повторите пароль', fg=settings.ROOT_FG,
-        bg=settings.ROOT_BG, font=settings.FONT
+        bg=settings.SECONDARY_BG, font=settings.FONT
     )
 
     entry_password2 = tk.Entry(
@@ -368,15 +406,22 @@ def sign_in_view():
     lb_password2.grid(row=2, column=0, sticky=tk.E)
     entry_password2.grid(row=2, column=1, sticky=tk.SW, padx=10)
     frame_input.pack(pady=15, padx=15)
-    root.after(20, lambda: rounded_rect(
-        canvas_input, 0, 0,
-        canvas_input.winfo_width() - 1, canvas_input.winfo_height() - 1, 20
-    ))
+
+    def _create_dark_zone(event):
+        w, h = event.width, event.height
+        Images.IMG_DARK_ZONE_SIGN_IN = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(w, h), proportions=False
+        )
+        canvas_input.coords(dark_zone, w / 2, h / 2)
+        canvas_input.itemconfig(dark_zone, image=Images.IMG_DARK_ZONE_SIGN_IN)
+
+    canvas_input.bind('<Configure>', _create_dark_zone)
 
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
 
     btn_sign_in = tk.Label(
-        frame_btns, image=IMG_SIGN_IN, bg=settings.ROOT_BG
+        frame_btns, image=Images.IMG_SIGN_IN, bg=settings.ROOT_BG
     )
 
     btn_log_in = tk.Label(
@@ -420,26 +465,45 @@ def home_view():
 
     frame_main = tk.Frame(bg=settings.ROOT_BG)
 
-    frame_tools = tk.Frame(frame_main, bg=settings.SECONDARY_BG, bd=10)
+    frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG, bd=10)
 
-    frame_profile = tk.Frame(frame_tools, bg=settings.SECONDARY_BG)
+    canvas_profile = tk.Canvas(
+        frame_tools, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone = canvas_profile.create_image(0, 0, image=Images.IMG_DARK_ZONE)
+    canvas_profile.pack()
+
+    frame_profile = tk.Frame(canvas_profile, bg=settings.SECONDARY_BG, bd=2)
     frame_profile_lbs = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
 
-    profile_icon = tk.Canvas(frame_profile, width=50, height=50, bg='#FFF')
+    profile_icon = tk.Canvas(frame_profile, width=35, height=35, bg='#FFF')
     profile_name = tk.Label(
         frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        font=settings.FONT, text=LOGIN
+        font=settings.FONT, text=USER_NAME
     )
-    profile_score = tk.Label(
+    profile_id = tk.Label(
         frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        font=settings.SMALL_FONT, text=f'Счёт: {profile.score}'
+        text=f'#{USER_ID}'
     )
 
     profile_icon.pack(side=tk.LEFT)
-    profile_name.grid(row=0, column=0, sticky=tk.EW)
-    profile_score.grid(row=1, column=0, sticky=tk.NW)
+    profile_name.pack(side=tk.TOP, anchor=tk.SW)
+    profile_id.pack(anchor=tk.NW)
     frame_profile_lbs.pack(padx=10)
-    frame_profile.pack(side=tk.TOP)
+    frame_profile.pack(side=tk.TOP, pady=5, padx=10)
+
+    def _create_dark_zone(event):
+        w, h = event.width, event.height
+        Images.IMG_DARK_ZONE_PROFILE = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(w, h), proportions=False
+        )
+        canvas_profile.coords(dark_zone, w / 2, h / 2)
+        canvas_profile.itemconfig(
+            dark_zone, image=Images.IMG_DARK_ZONE_PROFILE
+        )
+
+    canvas_profile.bind('<Configure>', _create_dark_zone)
 
     frame_filters = tk.Frame(frame_tools, bg=settings.SECONDARY_BG)
     frame_filters.pack(fill=tk.Y)
@@ -452,7 +516,7 @@ def home_view():
     Alert.show('Подготовка...', show_time=1)
 
     frame_quests = ScrollableFrame(frame_content)
-    quests = [QuestWidget(
+    [QuestWidget(
         frame_quests.scrollable_frame, q
     ) for q in Quests.quests]
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
@@ -461,7 +525,25 @@ def home_view():
 
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
 
-    print(Quests.quests)
+    def root_configure_handler(_event):
+        """
+        Обработчик изменений в окне
+        """
+
+        if root.winfo_width() < 800 and len(USER_NAME) > 10:
+            profile_name.config(text=USER_NAME[:5].strip() + '...')
+        elif root.winfo_width() > 1200:
+            if len(USER_NAME) < 25:
+                profile_name.config(text=USER_NAME)
+            else:
+                profile_name.config(text=USER_NAME[:17].strip() + '...')
+        else:
+            if len(USER_NAME) < 15:
+                profile_name.config(text=USER_NAME)
+            else:
+                profile_name.config(text=USER_NAME[:12].strip() + '...')
+
+    root.bind('<Configure>', root_configure_handler)
 
 
 @view

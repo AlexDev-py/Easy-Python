@@ -12,8 +12,9 @@ SERVER_ALLOWED = True
 if os.path.exists('.auth'):
     with open('.auth') as file:
         LOGIN, PASSWORD = file.read().split('::')
+        USER_NAME, USER_ID = LOGIN.split('#')
 else:
-    LOGIN, PASSWORD = None, None
+    LOGIN, PASSWORD, USER_NAME, USER_ID = None, None, None, None
 
 
 def request(path: str, **kwargs) -> dict:
@@ -68,9 +69,8 @@ def log_in(root: Any, _locals: dict, login: str, password: str):
             data.write(f'{login}::{password}')
         subprocess.check_call(['attrib', '+H', '.auth'])
         root.LOGIN = login
-        root.profile = AttrMap(request(
-            f'profile/{login.split("#")[1]}'
-        ))
+        root.USER_NAME, root.USER_ID = login.split('#')
+        root.profile = AttrMap(request(f'profile/{root.USER_ID}'))
         root.home_view(_locals)
     else:
         root.Alert.show('Неправильный логин или пароль')
@@ -105,18 +105,15 @@ def sign_in(
             data.write(f'{response["login"]}::{password}')
         subprocess.check_call(['attrib', '+H', '.auth'])
         root.LOGIN = response['login']
-        root.profile = AttrMap(request(
-            f'profile/{response["login"].split("#")[1]}'
-        ))
+        root.USER_NAME, root.USER_ID = response['login'].split('#')
+        root.profile = AttrMap(request(f'profile/{root.USER_ID}'))
         root.home_view(_locals)
 
 
 def _main(root: Any, _locals: dict = None):
-    if LOGIN and PASSWORD:
+    if LOGIN and PASSWORD and USER_NAME and USER_ID:
         if request('auth', login=LOGIN, password=PASSWORD)['response']:
-            root.profile = AttrMap(request(
-                f'profile/{LOGIN.split("#")[1]}'
-            ))
+            root.profile = AttrMap(request(f'profile/{USER_ID}'))
             root.home_view(_locals)
         else:
             os.remove('.auth')
