@@ -5,8 +5,8 @@ from typing import Any
 import requests
 from attrdict import AttrMap
 
-# HOST = 'http://127.0.0.1:5000/'
-HOST = 'http://easypython.pythonanywhere.com/'
+HOST = 'http://127.0.0.1:5000/'
+# HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
 
 if os.path.exists('.auth'):
@@ -114,6 +114,7 @@ def _main(root: Any, _locals: dict = None):
     if LOGIN and PASSWORD and USER_NAME and USER_ID:
         if request('auth', login=LOGIN, password=PASSWORD)['response']:
             root.profile = AttrMap(request(f'profile/{USER_ID}'))
+            root.profile.completed_tasks = [Quests.quests[0].name]
             root.home_view(_locals)
         else:
             os.remove('.auth')

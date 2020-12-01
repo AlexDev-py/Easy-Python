@@ -159,9 +159,39 @@ class QuestWidget(tk.Canvas):
             bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
             font=settings.BIG_FONT
         )
+        self.tasks_count = tk.Label(
+            self.frame, text=f'Количество заданий: {quest.tasks_count}',
+            bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+            font=settings.SMALL_FONT
+        )
 
-        self.name.pack(side=tk.LEFT)
-        self.frame.pack(fill=tk.X, padx=10, pady=10)
+        self.status_canvas = tk.Canvas(
+            self.frame, bg=settings.SECONDARY_BG, highlightthickness=0
+        )
+        self.status = tk.Label(
+            self.status_canvas, bg=settings.SECONDARY_BG,
+            text=(
+                'Не выполнено'
+                if quest.name not in profile.completed_tasks
+                else 'Выполнено'),
+            fg=(
+                settings.RED
+                if quest.name not in profile.completed_tasks
+                else settings.GREEN)
+        )
+
+        self.status_canvas.pack(side=tk.RIGHT, padx=30)
+        self.status.pack(pady=5, padx=5)
+
+        self.status_canvas.bind(
+            '<Configure>', lambda event: rounded_rect(
+                self.status_canvas, 0, 0, event.width - 1, event.height - 1, 10
+            )
+        )
+
+        self.name.pack(side=tk.TOP, anchor=tk.NW)
+        self.tasks_count.pack(anchor=tk.NW)
+        self.frame.pack(fill=tk.X, padx=10, pady=20)
         self.pack(fill=tk.X, pady=10)
 
     def _create_dark_zone(self, event):
@@ -191,36 +221,36 @@ def open_img(
     return ImageTk.PhotoImage(img)
 
 
-def rounded_rect(canvas, x, y, width, height, radius):
+def rounded_rect(canvas, x, y, width, height, radius, color=settings.CONSP_BG):
     """
     Рисует прямоугольник с закруглёнными краями
     """
 
     canvas.create_arc(
         x, y, x + 2 * radius, y + 2 * radius,
-        start=90, extent=90, style="arc", outline=settings.CONSP_BG)
+        start=90, extent=90, style="arc", outline=color)
     canvas.create_arc(
         x + width - 2 * radius, y + height - 2 * radius, x + width, y + height,
-        start=270, extent=90, style="arc", outline=settings.CONSP_BG)
+        start=270, extent=90, style="arc", outline=color)
     canvas.create_arc(
         x + width - 2 * radius, y, x + width, y + 2 * radius,
-        start=0, extent=90, style="arc", outline=settings.CONSP_BG)
+        start=0, extent=90, style="arc", outline=color)
     canvas.create_arc(
         x, y + height - 2 * radius, x + 2 * radius, y + height,
-        start=180, extent=90, style="arc", outline=settings.CONSP_BG)
+        start=180, extent=90, style="arc", outline=color)
     canvas.create_line(
-        x + radius, y, x + width - radius, y, fill=settings.CONSP_BG
+        x + radius, y, x + width - radius, y, fill=color
     )
     canvas.create_line(
         x + radius, y + height, x + width - radius, y + height,
-        fill=settings.CONSP_BG
+        fill=color
     )
     canvas.create_line(
-        x, y + radius, x, y + height - radius, fill=settings.CONSP_BG
+        x, y + radius, x, y + height - radius, fill=color
     )
     canvas.create_line(
         x + width, y + height - radius, x + width, y + radius,
-        fill=settings.CONSP_BG
+        fill=color
     )
 
 
