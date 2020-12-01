@@ -1,3 +1,9 @@
+"""
+
+Интерфейс приложения.
+
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,18 +13,17 @@ from functools import wraps
 
 from PIL import ImageTk, Image
 
-from main import *
-
-if __name__ == '__main__':
-    from sources.quests.quests import Quest
+from sources.quests.quests import Quests, Quest
+from main import (
+    log_in, sign_in, reconnection,
+    USER_NAME, USER_ID, interface, AttrMap
+)
 
 with open('settings.json') as settings:
     settings = AttrMap(json.load(settings))
 
 root = tk.Tk()
-Quests: "Quests" = ...
-interface = ...
-profile = ...
+profile: AttrMap
 root.config(bg=settings.ROOT_BG)
 root.geometry('800x500')
 root.resizable(False, False)
@@ -42,19 +47,16 @@ class Alert:
         :param show_time: Длительность показа сообщения.
         """
 
-        for lb in Alert.alert_frame.winfo_children():
-            lb.destroy()
-
+        for alert in Alert.alert_frame.winfo_children():
+            alert.destroy()
         self.can_hide = can_hide
         self.alert_frame = tk.Frame(Alert.alert_frame, bg=settings.CONSP_BG)
         self.alert_lb = tk.Label(
             self.alert_frame, text=message,
             bg=settings.CONSP_BG, fg=settings.CONSP_FG
         )
-
         self.alert_frame.pack(fill=tk.X)
         self.alert_lb.pack()
-
         if can_hide:
             root.after(show_time * 1000, self.destroy)
 
@@ -66,7 +68,6 @@ class Alert:
         self.alert_frame.destroy()
         self.alert_lb.destroy()
         Alert.alert_frame.update()
-        del self
         Alert.alert = None
 
     @classmethod
@@ -79,8 +80,16 @@ class Alert:
             if cls.alert.can_hide is False:
                 return
             cls.alert.destroy()
-
         cls.alert = Alert(message, can_hide=can_hide, show_time=show_time)
+
+    @classmethod
+    def prepare(cls):
+        """
+        Подготовка поля для вывода уведомлений.
+        """
+
+        cls.alert_frame.pack(side='top', fill='x')
+        cls.show('Подготовка...', show_time=1)
 
 
 class ScrollableFrame(tk.Frame):
@@ -91,14 +100,10 @@ class ScrollableFrame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
 
-        self._y = 0
-        self._move_count = 0
-
         self.canvas = tk.Canvas(
             self, bg=settings.ROOT_BG, highlightthickness=0
         )
         self.canvas.bind_all('<MouseWheel>', self.wheel_scroll)
-
         self.scrollable_frame = tk.Frame(
             self.canvas, bg=settings.ROOT_BG, bd=10
         )
@@ -109,7 +114,6 @@ class ScrollableFrame(tk.Frame):
         self._scrollable_frame = self.canvas.create_window(
             0, 0, window=self.scrollable_frame, anchor=tk.NW
         )
-
         style = ttk.Style()
         style.theme_use('clam')
         style.configure(
@@ -118,15 +122,12 @@ class ScrollableFrame(tk.Frame):
             troughcolor=settings.ROOT_BG, bordercolor=settings.ROOT_BG,
             arrowcolor=settings.ROOT_BG
         )
-
         self.scrollbar = ttk.Scrollbar(
             self, orient=tk.VERTICAL, command=self.canvas.yview
         )
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
         self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfig(
             self._scrollable_frame, width=event.width
         ))
@@ -144,14 +145,11 @@ class QuestWidget(tk.Canvas):
     Виджет темы.
     """
 
-    def __init__(self, master: tk.Frame, quest: "Quest"):
+    def __init__(self, master: tk.Frame, quest: Quest):
         super().__init__(master, bg=settings.ROOT_BG, highlightthickness=0)
-
         self._img_dark_zone = Images.IMG_DARK_ZONE
         self.dark_zone = self.create_image(0, 0, image=self._img_dark_zone)
-
         self.bind('<Configure>', self._create_dark_zone)
-
         self.quest = quest
         self.frame = tk.Frame(self, bg=settings.SECONDARY_BG, bd=5)
         self.name = tk.Label(
@@ -164,44 +162,76 @@ class QuestWidget(tk.Canvas):
             bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
             font=settings.SMALL_FONT
         )
-
         self.status_canvas = tk.Canvas(
             self.frame, bg=settings.SECONDARY_BG, highlightthickness=0
         )
-        self.status = tk.Label(
-            self.status_canvas, bg=settings.SECONDARY_BG,
-            text=(
-                'Не выполнено'
-                if quest.name not in profile.completed_tasks
-                else 'Выполнено'),
-            fg=(
-                settings.RED
-                if quest.name not in profile.completed_tasks
-                else settings.GREEN)
-        )
-
         self.status_canvas.pack(side=tk.RIGHT, padx=30)
-        self.status.pack(pady=5, padx=5)
-
-        self.status_canvas.bind(
-            '<Configure>', lambda event: rounded_rect(
-                self.status_canvas, 0, 0, event.width - 1, event.height - 1, 10
+        if quest.name in profile.completed_tasks:
+            self.status = tk.Label(
+                self.status_canvas, bg=settings.CONSP_BG,
+                text='Выполнено', fg=settings.ROOT_BG
             )
-        )
-
+            self.status.pack(pady=5, padx=5, side=tk.LEFT)
+            self._img_yellow_zone = Images.IMG_YELLOW_ZONE
+            self.status_ok = tk.Label(
+                self.status_canvas, bg=settings.CONSP_BG, image=Images.IMG_OK
+            )
+            self.status_ok.pack(side=tk.RIGHT, padx=5)
+            self.status_yellow_zone = self.status_canvas.create_image(
+                0, 0, image=self._img_yellow_zone
+            )
+            self.status_canvas.bind('<Configure>', self._create_yellow_zone)
+            self.completed_tasks = tk.Label(
+                self.frame, font=settings.SMALL_FONT,
+                text='Выполнено заданий: '
+                     f'{profile.completed_tasks[quest.name]["count"]}',
+                bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+            )
+            self.score_tasks = tk.Label(
+                self.frame, font=settings.SMALL_FONT,
+                text='Получено баллов: '
+                     f'{profile.completed_tasks[quest.name]["score"]}',
+                bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+            )
+            self.score_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
+            self.completed_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
+        else:
+            self.status = tk.Label(
+                self.status_canvas, bg=settings.SECONDARY_BG,
+                text='Не выполнено', fg=settings.YELLOW
+            )
+            self.status.pack(pady=5, padx=5)
+            self.status_canvas.bind(
+                '<Configure>', lambda event: rounded_rect(
+                    self.status_canvas, 0, 0,
+                    event.width - 1, event.height - 1, 10
+                ))
         self.name.pack(side=tk.TOP, anchor=tk.NW)
         self.tasks_count.pack(anchor=tk.NW)
         self.frame.pack(fill=tk.X, padx=10, pady=20)
         self.pack(fill=tk.X, pady=10)
 
     def _create_dark_zone(self, event):
-        w, h = event.width, event.height
+        width, height = event.width, event.height
         self._img_dark_zone = open_img(
             Images.dp + 'dark_zone.png',
-            size=(w, h), proportions=False
+            size=(width, height), proportions=False
         )
-        self.coords(self.dark_zone, w / 2, h / 2)
+        self.coords(self.dark_zone, width / 2, height / 2)
         self.itemconfig(self.dark_zone, image=self._img_dark_zone)
+
+    def _create_yellow_zone(self, event):
+        width, height = event.width, event.height
+        self._img_yellow_zone = open_img(
+            Images.dp + 'yellow_zone.png',
+            size=(width, height), proportions=False
+        )
+        self.status_canvas.coords(
+            self.status_yellow_zone, width / 2, height / 2
+        )
+        self.status_canvas.itemconfig(
+            self.status_yellow_zone, image=self._img_yellow_zone
+        )
 
 
 def open_img(
@@ -221,7 +251,9 @@ def open_img(
     return ImageTk.PhotoImage(img)
 
 
-def rounded_rect(canvas, x, y, width, height, radius, color=settings.CONSP_BG):
+def rounded_rect(
+        canvas, x, y, width, height, radius, color=settings.CONSP_BG
+):
     """
     Рисует прямоугольник с закруглёнными краями
     """
@@ -262,7 +294,9 @@ class Images:
     dp = 'sources/images/'
     IMG_LOG_IN = open_img(dp + 'btn_log_in.png', size=(160, 60))
     IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(180, 70))
+    IMG_OK = open_img(dp + 'ok.png', size=(10, 10))
     IMG_DARK_ZONE = open_img(dp + 'dark_zone.png', need_resize=False)
+    IMG_YELLOW_ZONE = open_img(dp + 'yellow_zone.png', need_resize=False)
 
 
 def view(func):
@@ -271,7 +305,7 @@ def view(func):
     """
 
     @wraps(func)
-    def _wrap(_locals: dict = None, *args, **kwargs):
+    def _wrap(*args, _locals: dict = None, **kwargs):
         # Удаление элементов старой страницы
         if _locals:
             for obj in _locals.values():
@@ -292,32 +326,26 @@ def log_in_view():
     root.geometry('620x465')
     root.title('Авторизация')
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
-
     canvas_input = tk.Canvas(
         frame_main, bg=settings.ROOT_BG, highlightthickness=0
     )
     dark_zone = canvas_input.create_image(0, 0, image=Images.IMG_DARK_ZONE)
     canvas_input.pack()
-
     frame_input = tk.Frame(canvas_input, bg=settings.SECONDARY_BG, bd=10)
-
     lb_login = tk.Label(
         frame_input, text='Логин', fg=settings.ROOT_FG,
         bg=settings.SECONDARY_BG, font=settings.FONT
     )
-
     entry_login = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
         relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=25
     )
-
     lb_password = tk.Label(
         frame_input, text='Пароль', fg=settings.ROOT_FG,
         bg=settings.SECONDARY_BG, font=settings.FONT
     )
-
     entry_password = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         highlightthickness=1, highlightcolor=settings.CONSP_BG,
@@ -325,7 +353,6 @@ def log_in_view():
         relief=tk.FLAT, insertbackground=settings.ROOT_FG,
         show='*', width=25
     )
-
     lb_login.grid(row=0, column=0, sticky=tk.E)
     entry_login.grid(row=0, column=1, sticky=tk.W, padx=10)
     lb_password.grid(row=1, column=0, sticky=tk.E, pady=15)
@@ -333,39 +360,33 @@ def log_in_view():
     frame_input.pack(pady=15, padx=25)
 
     def _create_dark_zone(event):
-        w, h = event.width, event.height
+        width, height = event.width, event.height
         Images.IMG_DARK_ZONE_LOG_IN = open_img(
             Images.dp + 'dark_zone.png',
-            size=(w, h), proportions=False
+            size=(width, height), proportions=False
         )
-        canvas_input.coords(dark_zone, w / 2, h / 2)
+        canvas_input.coords(dark_zone, width / 2, height / 2)
         canvas_input.itemconfig(dark_zone, image=Images.IMG_DARK_ZONE_LOG_IN)
 
     canvas_input.bind('<Configure>', _create_dark_zone)
-
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
-
     btn_log_in = tk.Label(
         frame_btns, image=Images.IMG_LOG_IN, bg=settings.ROOT_BG
     )
-
     btn_sign_in = tk.Label(
         frame_btns, text='Зарегистрироваться', font=settings.SMALL_FONT,
         bg=settings.ROOT_BG, fg=settings.CONSP_BG
     )
-
     btn_sign_in.pack(side=tk.BOTTOM)
     btn_log_in.pack(side=tk.BOTTOM)
     frame_btns.pack(pady=50)
-
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
-
     entry_login.focus()
     _locals = locals()
-
-    btn_sign_in.bind('<Button-1>', lambda event: sign_in_view(_locals))
+    btn_sign_in.bind('<Button-1>', lambda event: sign_in_view(_locals=_locals))
     root.bind_all('<Return>', lambda event: log_in(
-        interface, _locals, entry_login.get(), entry_password.get()
+        root=interface, _locals=_locals,
+        login=entry_login.get(), password=entry_password.get()
     ))
     btn_log_in.bind('<Button-1>', lambda event: log_in(
         interface, _locals, entry_login.get(), entry_password.get()
@@ -380,34 +401,27 @@ def sign_in_view():
 
     root.geometry('620x465')
     root.title('Регистрация')
-
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
-
     canvas_input = tk.Canvas(
         frame_main, bg=settings.ROOT_BG, highlightthickness=0
     )
     dark_zone = canvas_input.create_image(0, 0, image=Images.IMG_DARK_ZONE)
     canvas_input.pack()
-
     frame_input = tk.Frame(canvas_input, bg=settings.SECONDARY_BG, bd=10)
-
     lb_login = tk.Label(
         frame_input, text='Имя пользователя', fg=settings.ROOT_FG,
         bg=settings.SECONDARY_BG, font=settings.FONT
     )
-
     entry_login = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         highlightthickness=1, highlightcolor=settings.CONSP_BG,
         highlightbackground=settings.CONSP_BG, font=settings.FONT,
         relief=tk.FLAT, insertbackground=settings.ROOT_FG, width=22
     )
-
     lb_password = tk.Label(
         frame_input, text='Пароль', fg=settings.ROOT_FG,
         bg=settings.SECONDARY_BG, font=settings.FONT
     )
-
     entry_password = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         highlightthickness=1, highlightcolor=settings.CONSP_BG,
@@ -415,12 +429,10 @@ def sign_in_view():
         relief=tk.FLAT, insertbackground=settings.ROOT_FG,
         show='*', width=22
     )
-
     lb_password2 = tk.Label(
         frame_input, text='Повторите пароль', fg=settings.ROOT_FG,
         bg=settings.SECONDARY_BG, font=settings.FONT
     )
-
     entry_password2 = tk.Entry(
         frame_input, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         highlightthickness=1, highlightcolor=settings.CONSP_BG,
@@ -428,7 +440,6 @@ def sign_in_view():
         relief=tk.FLAT, insertbackground=settings.ROOT_FG,
         show='*', width=22
     )
-
     lb_login.grid(row=0, column=0, sticky=tk.E)
     entry_login.grid(row=0, column=1, sticky=tk.SW, padx=10)
     lb_password.grid(row=1, column=0, sticky=tk.E, pady=15)
@@ -438,40 +449,33 @@ def sign_in_view():
     frame_input.pack(pady=15, padx=15)
 
     def _create_dark_zone(event):
-        w, h = event.width, event.height
+        width, height = event.width, event.height
         Images.IMG_DARK_ZONE_SIGN_IN = open_img(
             Images.dp + 'dark_zone.png',
-            size=(w, h), proportions=False
+            size=(width, height), proportions=False
         )
-        canvas_input.coords(dark_zone, w / 2, h / 2)
+        canvas_input.coords(dark_zone, width / 2, height / 2)
         canvas_input.itemconfig(dark_zone, image=Images.IMG_DARK_ZONE_SIGN_IN)
 
     canvas_input.bind('<Configure>', _create_dark_zone)
-
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
-
     btn_sign_in = tk.Label(
         frame_btns, image=Images.IMG_SIGN_IN, bg=settings.ROOT_BG
     )
-
     btn_log_in = tk.Label(
         frame_btns, text='Войти в существующий профиль',
         font=settings.SMALL_FONT, bg=settings.ROOT_BG, fg=settings.CONSP_BG
     )
-
     btn_log_in.pack(side=tk.BOTTOM)
     btn_sign_in.pack(side=tk.BOTTOM)
     frame_btns.pack(pady=55)
-
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=15)
-
     entry_login.focus()
     _locals = locals()
-
-    btn_log_in.bind('<Button-1>', lambda event: log_in_view(_locals))
+    btn_log_in.bind('<Button-1>', lambda event: log_in_view(_locals=_locals))
     root.bind_all('<Return>', lambda event: sign_in(
-        interface, _locals, entry_login.get(),
-        entry_password.get(), entry_password2.get()
+        root=interface, _locals=_locals, login=entry_login.get(),
+        password=entry_password.get(), password2=entry_password2.get()
     ))
     btn_sign_in.bind('<Button-1>', lambda event: sign_in(
         interface, _locals, entry_login.get(),
@@ -487,25 +491,19 @@ def home_view():
     """
 
     Alert.alert_frame.destroy()
-
     root.title('Easy-Python: Учить Python легко!')
     root.geometry('800x500')
     root.minsize(650, 400)
     root.resizable(True, True)
-
     frame_main = tk.Frame(bg=settings.ROOT_BG)
-
     frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG, bd=10)
-
     canvas_profile = tk.Canvas(
         frame_tools, bg=settings.ROOT_BG, highlightthickness=0
     )
     dark_zone = canvas_profile.create_image(0, 0, image=Images.IMG_DARK_ZONE)
     canvas_profile.pack()
-
     frame_profile = tk.Frame(canvas_profile, bg=settings.SECONDARY_BG, bd=2)
     frame_profile_lbs = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
-
     profile_icon = tk.Canvas(frame_profile, width=35, height=35, bg='#FFF')
     profile_name = tk.Label(
         frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
@@ -515,7 +513,6 @@ def home_view():
         frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         text=f'#{USER_ID}'
     )
-
     profile_icon.pack(side=tk.LEFT)
     profile_name.pack(side=tk.TOP, anchor=tk.SW)
     profile_id.pack(anchor=tk.NW)
@@ -523,36 +520,29 @@ def home_view():
     frame_profile.pack(side=tk.TOP, pady=5, padx=10)
 
     def _create_dark_zone(event):
-        w, h = event.width, event.height
+        width, height = event.width, event.height
         Images.IMG_DARK_ZONE_PROFILE = open_img(
             Images.dp + 'dark_zone.png',
-            size=(w, h), proportions=False
+            size=(width, height), proportions=False
         )
-        canvas_profile.coords(dark_zone, w / 2, h / 2)
+        canvas_profile.coords(dark_zone, width / 2, height / 2)
         canvas_profile.itemconfig(
             dark_zone, image=Images.IMG_DARK_ZONE_PROFILE
         )
 
     canvas_profile.bind('<Configure>', _create_dark_zone)
-
     frame_filters = tk.Frame(frame_tools, bg=settings.SECONDARY_BG)
     frame_filters.pack(fill=tk.Y)
-
     frame_tools.pack(side=tk.LEFT, fill=tk.Y)
-
     frame_content = tk.Frame(frame_main, bg=settings.ROOT_BG)
     Alert.alert_frame = tk.Frame(frame_content, bg=settings.ROOT_BG)
     Alert.alert_frame.pack(side='top', fill='x')
     Alert.show('Подготовка...', show_time=1)
-
     frame_quests = ScrollableFrame(frame_content)
-    [QuestWidget(
-        frame_quests.scrollable_frame, q
-    ) for q in Quests.quests]
+    for quest in Quests.quests:
+        QuestWidget(frame_quests.scrollable_frame, quest=quest)
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
-
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
-
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
 
     def root_configure_handler(_event):
@@ -577,6 +567,13 @@ def home_view():
 
 
 @view
+def quest_view():
+    """
+    Страница задания
+    """
+
+
+@view
 def connection_error_view(error_info: str = ''):
     """
     Окно, сообщающее об ошибке подключения к серверу
@@ -584,21 +581,17 @@ def connection_error_view(error_info: str = ''):
 
     root.geometry('560x420')
     root.title('Ошибка соединения')
-
     frame_main = tk.Frame(bg=settings.ROOT_BG)
     lb1 = tk.Label(
-        frame_main, text=f'Нет связи с сервером.',
+        frame_main, text='Нет связи с сервером.',
         bg=settings.ROOT_BG, fg=settings.ROOT_FG, font=settings.BIG_FONT
     )
     lb2 = tk.Label(
         frame_main, text=error_info,
         bg=settings.ROOT_BG, fg=settings.ROOT_FG, font=settings.SMALL_FONT
     )
-
     lb1.pack()
     lb2.pack()
     frame_main.pack(pady=100)
-
     _locals = locals()
-
     root.after(5000, lambda: reconnection(interface, _locals))

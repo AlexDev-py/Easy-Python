@@ -1,9 +1,18 @@
+"""
+
+Файл запускающий приложение.
+Здесь находится весь функционал.
+
+"""
+
 import os
 import subprocess
 from typing import Any
 
 import requests
 from attrdict import AttrMap
+
+import interface
 
 # HOST = 'http://127.0.0.1:5000/'
 HOST = 'http://easypython.pythonanywhere.com/'
@@ -26,7 +35,6 @@ def request(path: str, **kwargs) -> dict:
 
     if not SERVER_ALLOWED:
         return dict(response=0)
-
     return requests.post('{HOST}{path}?{args}'.format(
         HOST=HOST, path=path,
         args='&'.join(
@@ -42,7 +50,6 @@ def reconnection(root: Any, _locals: dict):
 
     _locals['lb2'].config(text='Подключение...')
     _locals['lb2'].update()
-
     try:
         _main(root, _locals)
     except (requests.ConnectionError, requests.HTTPError):
@@ -57,12 +64,11 @@ def log_in(root: Any, _locals: dict, login: str, password: str):
 
     if login == '':
         _locals['entry_login'].focus()
-        return root.Alert.show('Введите логин')
+        root.Alert.show('Введите логин')
     elif password == '':
         _locals['entry_password'].focus()
-        return root.Alert.show('Введите пароль')
-
-    if request('auth', login=login, password=password)['response']:
+        root.Alert.show('Введите пароль')
+    elif request('auth', login=login, password=password)['response']:
         if os.path.exists('.auth'):
             os.remove('.auth')
         with open('.auth', 'w') as data:
@@ -71,7 +77,7 @@ def log_in(root: Any, _locals: dict, login: str, password: str):
         root.LOGIN = login
         root.USER_NAME, root.USER_ID = login.split('#')
         root.profile = AttrMap(request(f'profile/{root.USER_ID}'))
-        root.home_view(_locals)
+        root.home_view(_locals=_locals)
     else:
         root.Alert.show('Неправильный логин или пароль')
 
@@ -86,17 +92,16 @@ def sign_in(
 
     if login == '':
         _locals['entry_login'].focus()
-        return root.Alert.show('Введите логин')
+        root.Alert.show('Введите логин')
     elif password == '':
         _locals['entry_password'].focus()
-        return root.Alert.show('Введите пароль')
+        root.Alert.show('Введите пароль')
     elif password2 == '':
         _locals['entry_password2'].focus()
-        return root.Alert.show('Повторите пароль')
+        root.Alert.show('Повторите пароль')
     elif password != password2:
-        return root.Alert.show('Пароли не совпадают')
-
-    if (
+        root.Alert.show('Пароли не совпадают')
+    elif (
             response := request('sing_in', login=login, password=password)
     )['response']:
         if os.path.exists('.auth'):
@@ -107,33 +112,30 @@ def sign_in(
         root.LOGIN = response['login']
         root.USER_NAME, root.USER_ID = response['login'].split('#')
         root.profile = AttrMap(request(f'profile/{root.USER_ID}'))
-        root.home_view(_locals)
+        root.home_view(_locals=_locals)
 
 
 def _main(root: Any, _locals: dict = None):
     if LOGIN and PASSWORD and USER_NAME and USER_ID:
         if request('auth', login=LOGIN, password=PASSWORD)['response']:
             root.profile = AttrMap(request(f'profile/{USER_ID}'))
-            root.profile.completed_tasks = [Quests.quests[0].name]
-            root.home_view(_locals)
+            print(root.profile)
+            root.profile.completed_tasks[root.Quests.quests[0].name] = dict(
+                count=3, score=10
+            )
+            root.home_view(_locals=_locals)
         else:
+            root.Alert.prepare()
             os.remove('.auth')
-            root.log_in_view(_locals)
+            root.log_in_view(_locals=_locals)
     else:
+        root.Alert.prepare()
         request('test')
-        root.log_in_view(_locals)
+        root.log_in_view(_locals=_locals)
 
 
 if __name__ == '__main__':
-    import interface
-    from sources.quests.quests import Quests
-
-    interface.Quests = Quests
     interface.interface = interface
-
-    if not LOGIN:
-        interface.Alert.alert_frame.pack(side='top', fill='x')
-        interface.Alert.show('Подготовка...', show_time=1)
 
     try:
         _main(interface)
