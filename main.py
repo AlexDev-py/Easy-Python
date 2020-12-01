@@ -14,8 +14,8 @@ from attrdict import AttrMap
 
 import interface
 
-# HOST = 'http://127.0.0.1:5000/'
-HOST = 'http://easypython.pythonanywhere.com/'
+HOST = 'http://127.0.0.1:5000/'
+# HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
 
 if os.path.exists('.auth'):
@@ -119,9 +119,8 @@ def _main(root: Any, _locals: dict = None):
     if LOGIN and PASSWORD and USER_NAME and USER_ID:
         if request('auth', login=LOGIN, password=PASSWORD)['response']:
             root.profile = AttrMap(request(f'profile/{USER_ID}'))
-            print(root.profile)
             root.profile.completed_tasks[root.Quests.quests[0].name] = dict(
-                count=3, score=10
+                completed_count=3, score=10, try_count=1
             )
             root.home_view(_locals=_locals)
         else:

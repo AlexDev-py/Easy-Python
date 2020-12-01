@@ -13,7 +13,7 @@ from functools import wraps
 
 from PIL import ImageTk, Image
 
-from sources.quests.quests import Quests, Quest
+from sources.quests.quests import Quests, Quest, Task
 from main import (
     log_in, sign_in, reconnection,
     USER_NAME, USER_ID, interface, AttrMap
@@ -97,11 +97,12 @@ class ScrollableFrame(tk.Frame):
     Прокручиваемый фрейм
     """
 
-    def __init__(self, master):
+    def __init__(self, master, width=None):
         super().__init__(master)
 
         self.canvas = tk.Canvas(
-            self, bg=settings.ROOT_BG, highlightthickness=0
+            self, bg=settings.ROOT_BG, highlightthickness=0,
+            width=width
         )
         self.canvas.bind_all('<MouseWheel>', self.wheel_scroll)
         self.scrollable_frame = tk.Frame(
@@ -131,13 +132,19 @@ class ScrollableFrame(tk.Frame):
         self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfig(
             self._scrollable_frame, width=event.width
         ))
+        self.bind(
+            '<Destroy>', lambda event: self.canvas.unbind_all('<MouseWheel>')
+        )
 
     def wheel_scroll(self, event):
         """
         Прокрутка колёсиком мыши
         """
 
-        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), tk.UNITS)
+        try:
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), tk.UNITS)
+        except tk.TclError:
+            pass
 
 
 class QuestWidget(tk.Canvas):
@@ -145,7 +152,7 @@ class QuestWidget(tk.Canvas):
     Виджет темы.
     """
 
-    def __init__(self, master: tk.Frame, quest: Quest):
+    def __init__(self, master: tk.Frame, quest: Quest, _locals: dict):
         super().__init__(master, bg=settings.ROOT_BG, highlightthickness=0)
         self._img_dark_zone = Images.IMG_DARK_ZONE
         self.dark_zone = self.create_image(0, 0, image=self._img_dark_zone)
@@ -183,8 +190,8 @@ class QuestWidget(tk.Canvas):
             self.status_canvas.bind('<Configure>', self._create_yellow_zone)
             self.completed_tasks = tk.Label(
                 self.frame, font=settings.SMALL_FONT,
-                text='Выполнено заданий: '
-                     f'{profile.completed_tasks[quest.name]["count"]}',
+                text='Выполнено заданий: {}'.format(
+                    profile.completed_tasks[quest.name]["completed_count"]),
                 bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
             )
             self.score_tasks = tk.Label(
@@ -193,6 +200,13 @@ class QuestWidget(tk.Canvas):
                      f'{profile.completed_tasks[quest.name]["score"]}',
                 bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
             )
+            self.try_count_tasks = tk.Label(
+                self.frame, font=settings.SMALL_FONT,
+                text='Количество прохождений: '
+                     f'{profile.completed_tasks[quest.name]["try_count"]}',
+                bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+            )
+            self.try_count_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
             self.score_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
             self.completed_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
         else:
@@ -210,6 +224,13 @@ class QuestWidget(tk.Canvas):
         self.tasks_count.pack(anchor=tk.NW)
         self.frame.pack(fill=tk.X, padx=10, pady=20)
         self.pack(fill=tk.X, pady=10)
+        self.frame.bind('<Button-1>', lambda event: quest_preview_view(
+            home_view, _locals=_locals, quest=self.quest
+        ))
+        self.name.bind('<Button-1>', lambda event: quest_preview_view(
+            home_view, _locals=_locals, quest=self.quest
+        ))
+        self.bind('<Destroy>', lambda event: self.unbind_all('<Button-1>'))
 
     def _create_dark_zone(self, event):
         width, height = event.width, event.height
@@ -232,6 +253,22 @@ class QuestWidget(tk.Canvas):
         self.status_canvas.itemconfig(
             self.status_yellow_zone, image=self._img_yellow_zone
         )
+
+
+class TaskLabel(tk.Label):
+    """
+    Элемент из списка заданий
+    """
+
+    def __init__(
+            self, master: tk.Frame, task_index: int, task: Task,
+            open_task, **kwargs
+    ):
+        super().__init__(master, **kwargs)
+        self.task = task
+        self.task_index = task_index
+        self.bind('<Button-1>', lambda event: open_task(self.task))
+        self.pack(anchor=tk.NW)
 
 
 def open_img(
@@ -294,6 +331,8 @@ class Images:
     dp = 'sources/images/'
     IMG_LOG_IN = open_img(dp + 'btn_log_in.png', size=(160, 60))
     IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(180, 70))
+    IMG_RUN = open_img(dp + 'btn_run.png', size=(160, 60))
+    IMG_CANCEL = open_img(dp + 'btn_cancel.png', size=(160, 60))
     IMG_OK = open_img(dp + 'ok.png', size=(10, 10))
     IMG_DARK_ZONE = open_img(dp + 'dark_zone.png', need_resize=False)
     IMG_YELLOW_ZONE = open_img(dp + 'yellow_zone.png', need_resize=False)
@@ -484,7 +523,7 @@ def sign_in_view():
 
 
 @view
-def home_view():
+def home_view(need_resize=True):
     """
     Главная страница приложения.
     Страница выбора темы.
@@ -492,9 +531,10 @@ def home_view():
 
     Alert.alert_frame.destroy()
     root.title('Easy-Python: Учить Python легко!')
-    root.geometry('800x500')
-    root.minsize(650, 400)
-    root.resizable(True, True)
+    if need_resize:
+        root.geometry('800x500')
+        root.minsize(650, 400)
+        root.resizable(True, True)
     frame_main = tk.Frame(bg=settings.ROOT_BG)
     frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG, bd=10)
     canvas_profile = tk.Canvas(
@@ -539,8 +579,11 @@ def home_view():
     Alert.alert_frame.pack(side='top', fill='x')
     Alert.show('Подготовка...', show_time=1)
     frame_quests = ScrollableFrame(frame_content)
+    _locals = locals()
     for quest in Quests.quests:
-        QuestWidget(frame_quests.scrollable_frame, quest=quest)
+        QuestWidget(
+            frame_quests.scrollable_frame, quest=quest, _locals=_locals
+        )
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
@@ -564,13 +607,142 @@ def home_view():
                 profile_name.config(text=USER_NAME[:12].strip() + '...')
 
     root.bind('<Configure>', root_configure_handler)
+    frame_main.bind('<Destroy>', lambda event: root.unbind('<Configure>'))
 
 
 @view
-def quest_view():
+def quest_preview_view(last_view, quest: Quest):
     """
-    Страница задания
+    Страница подтверждения начала тестирования.
+    :param last_view: Пред идущая страница.
+    :param quest: Данные о выбранном задании.
     """
+
+    root.title(f'Тема: {quest.name}')
+
+    frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
+    canvas_info = tk.Canvas(
+        frame_main, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone = canvas_info.create_image(0, 0, image=Images.IMG_DARK_ZONE)
+    canvas_info.pack()
+    frame_info = tk.Frame(canvas_info, bg=settings.SECONDARY_BG, bd=10)
+    lb_info = tk.Label(
+        frame_info, font=settings.FONT,
+        text=f'Вы хотите начать прохождение теста на тему\n"{quest.name}"?\n'
+             'Чтобы пройти тест, необходимо выполнить хотя бы\n'
+             f'одно из {quest.tasks_count} заданий.',
+        bg=settings.SECONDARY_BG, fg=settings.ROOT_FG
+    )
+    lb_info.pack()
+    frame_info.pack(padx=10, pady=10)
+
+    def _create_dark_zone(event):
+        width, height = event.width, event.height
+        Images.IMG_DARK_ZONE_PREVIEW_QUEST = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(width, height), proportions=False
+        )
+        canvas_info.coords(dark_zone, width / 2, height / 2)
+        canvas_info.itemconfig(
+            dark_zone, image=Images.IMG_DARK_ZONE_PREVIEW_QUEST
+        )
+
+    canvas_info.bind('<Configure>', _create_dark_zone)
+    frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    btn_cancel = tk.Label(
+        frame_btns, image=Images.IMG_CANCEL, bg=settings.ROOT_BG
+    )
+    btn_submit = tk.Label(
+        frame_btns, image=Images.IMG_RUN, bg=settings.ROOT_BG
+    )
+    btn_cancel.pack(side=tk.LEFT, padx=5)
+    btn_submit.pack(side=tk.RIGHT, padx=5)
+    frame_btns.pack(pady=30)
+    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
+    _locals = locals()
+    btn_cancel.bind('<Button-1>', lambda event: last_view(
+        need_resize=False, _locals=_locals
+    ))
+    btn_submit.bind('<Button-1>', lambda event: quest_view(
+        last_view, quest, _locals=_locals
+    ))
+
+
+@view
+def quest_view(last_view, quest: Quest):
+    """
+    Страница задания.
+    :param last_view: Пред идущая страница.
+    :param quest: Данные о выбранном задании.
+    """
+
+    Alert.alert_frame.destroy()
+    frame_main = tk.Frame(bg=settings.ROOT_BG)
+    frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG, bd=10)
+    canvas_tools = tk.Canvas(
+        frame_tools, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone_tools = canvas_tools.create_image(0, 0, image=Images.IMG_DARK_ZONE)
+    canvas_tools.pack()
+    frame_info = tk.Frame(canvas_tools, bg=settings.SECONDARY_BG, bd=2)
+    time_limit = tk.Label(
+        frame_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        font=settings.BIG_FONT,
+        text=f'{quest.time_limit // 60}м {quest.time_limit % 60}с'
+    )
+    btn_exit = tk.Button(
+        frame_info, bg=settings.CONSP_BG, fg=settings.CONSP_FG,
+        text='Завершить тестирование'
+    )
+    time_limit.pack(side=tk.TOP, anchor=tk.SW)
+    btn_exit.pack(anchor=tk.SW, pady=15)
+    frame_info.pack(padx=10, pady=10)
+    frame_tools.pack(side=tk.TOP, pady=5, padx=10)
+
+    def _create_dark_zone(event):
+        width, height = event.width, event.height
+        Images.IMG_DARK_ZONE_QUEST_INFO = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(width, height), proportions=False
+        )
+        canvas_tools.coords(dark_zone_tools, width / 2, height / 2)
+        canvas_tools.itemconfig(
+            dark_zone_tools, image=Images.IMG_DARK_ZONE_QUEST_INFO
+        )
+        rounded_rect(
+            canvas_tools, 2, 2, event.width - 4,
+            event.height - 4, 12
+        )
+
+    canvas_tools.bind('<Configure>', _create_dark_zone)
+    frame_tasks = ScrollableFrame(frame_tools, width=200)
+
+    def open_task(selected_task: Task):
+        """
+        Отображает выбранное задание
+        """
+
+    for i, task in enumerate(quest.tasks):
+        TaskLabel(
+            frame_tasks.scrollable_frame, text=f'{i}. {task.question[:20]}...',
+            task_index=i, task=task, open_task=open_task,
+            bg=settings.ROOT_BG, fg=settings.ROOT_FG,
+        )
+    frame_tasks.pack(fill=tk.Y, pady=10)
+
+    canvas_tools.bind('<Configure>', _create_dark_zone)
+    frame_tools.pack(side=tk.LEFT, fill=tk.Y)
+    frame_content = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    Alert.alert_frame = tk.Frame(frame_content, bg=settings.ROOT_BG)
+    Alert.alert_frame.pack(side='top', fill='x')
+    Alert.show('Начинайте решать', show_time=1)
+    frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
+    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
+    _locals = locals()
+    btn_exit.bind('<Button-1>', lambda event: last_view(
+        _locals=_locals, need_resize=False
+    ))
 
 
 @view
