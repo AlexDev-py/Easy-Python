@@ -115,6 +115,18 @@ def sign_in(
         root.home_view(_locals=_locals)
 
 
+def complete_quest(root: Any, quest_data: "interface.QuestProcess"):
+    """
+    Сохраняем результаты тестирования
+    """
+
+    root.profile = AttrMap(request(
+        f'profile/{USER_ID}/quest/{quest_data.quest.name}',
+        completed_count=f'{quest_data.completed_count}',
+        score=f'{quest_data.score}'
+    ))
+
+
 def _main(root: Any, _locals: dict = None):
     if LOGIN and PASSWORD and USER_NAME and USER_ID:
         if request('auth', login=LOGIN, password=PASSWORD)['response']:

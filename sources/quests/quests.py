@@ -86,7 +86,7 @@
 """
 
 from __future__ import annotations
-from typing import Iterable
+from typing import List
 import re
 import os
 from dataclasses import dataclass
@@ -123,6 +123,9 @@ class Task:
                 r'::answer::<(?P<answer>.+)>::',
                 self.question, flags=re.DOTALL
         ):
+            self.task = re.sub(
+                r'\n::answer::<.+>::', '', self.task, flags=re.DOTALL
+            )
             self.question = self.question[:answer_data.start()].strip()
             self.answer = answer_data.group('answer')
 
@@ -130,6 +133,9 @@ class Task:
                 r'::input::(?P<input_data>.+)::',
                 self.question, flags=re.DOTALL
         ):
+            self.task = re.sub(
+                r'\n::input::.+::', '', self.task, flags=re.DOTALL
+            )
             self.question = self.question[:input_data.start()].strip()
             input_data = input_data.group('input_data')
             input_data = [
@@ -177,7 +183,7 @@ class Quest:
     """ Лимит по времени """
     time_limit: int
     """ Список заданий """
-    tasks: Iterable[Task]
+    tasks: List[Task]
 
     def __post_init__(self):
         Quests.quests.append(self)
