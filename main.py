@@ -115,6 +115,15 @@ def sign_in(
         root.home_view(_locals=_locals)
 
 
+def log_out(root: Any, _locals: dict):
+    """
+    Выход из профиля.
+    """
+
+    os.remove('.auth')
+    root.log_in_view(need_resize=True, _locals=_locals)
+
+
 def complete_quest(root: Any, quest_data: "interface.QuestProcess"):
     """
     Сохраняем результаты тестирования
@@ -131,9 +140,6 @@ def _main(root: Any, _locals: dict = None):
     if LOGIN and PASSWORD and USER_NAME and USER_ID:
         if request('auth', login=LOGIN, password=PASSWORD)['response']:
             root.profile = AttrMap(request(f'profile/{USER_ID}'))
-            root.profile.completed_tasks[root.Quests.quests[0].name] = dict(
-                completed_count=3, score=10, try_count=1
-            )
             root.home_view(_locals=_locals)
         else:
             root.Alert.prepare()

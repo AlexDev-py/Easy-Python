@@ -17,8 +17,8 @@ from PIL import ImageTk, Image
 
 from sources.quests.quests import Quests, Quest, Task
 from main import (
-    log_in, sign_in, complete_quest, reconnection,
-    USER_NAME, USER_ID, interface, AttrMap
+    log_in, sign_in, log_out, complete_quest, reconnection,
+    USER_NAME, USER_ID, LOGIN, interface, AttrMap
 )
 
 with open('settings.json') as settings:
@@ -99,7 +99,7 @@ class ScrollableFrame(tk.Frame):
     Прокручиваемый фрейм
     """
 
-    def __init__(self, master, width=None, bind_all=True):
+    def __init__(self, master, side=tk.RIGHT, width=None, bind_all=True):
         super().__init__(master)
 
         self.canvas = tk.Canvas(
@@ -132,8 +132,8 @@ class ScrollableFrame(tk.Frame):
             self, orient=tk.VERTICAL, command=self.canvas.yview
         )
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side=side, fill=tk.Y)
+        self.canvas.pack(side=side, fill=tk.BOTH, expand=True)
         self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfig(
             self._scrollable_frame, width=event.width
         ))
@@ -157,7 +157,10 @@ class QuestWidget(tk.Canvas):
     Виджет темы.
     """
 
-    def __init__(self, master: tk.Frame, quest: Quest, _locals: dict):
+    def __init__(
+            self, master: tk.Frame, quest: Quest, last_view,
+            _locals: dict, statistic=True, max_length=None
+    ):
         super().__init__(master, bg=settings.ROOT_BG, highlightthickness=0)
         self._img_dark_zone = Images.IMG_DARK_ZONE
         self.dark_zone = self.create_image(0, 0, image=self._img_dark_zone)
@@ -165,9 +168,11 @@ class QuestWidget(tk.Canvas):
         self.quest = quest
         self.frame = tk.Frame(self, bg=settings.SECONDARY_BG, bd=5)
         self.name = tk.Label(
-            self.frame, text=quest.name,
-            bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-            font=settings.BIG_FONT
+            self.frame, font=settings.BIG_FONT,
+            text=(
+                quest.name if not max_length or len(quest.name) <= max_length
+                else quest.name[:max_length-1].strip() + '...'),
+            bg=settings.SECONDARY_BG, fg=settings.ROOT_FG
         )
         self.tasks_count = tk.Label(
             self.frame, text=f'Количество заданий: {quest.tasks_count}',
@@ -177,68 +182,70 @@ class QuestWidget(tk.Canvas):
         self.status_canvas = tk.Canvas(
             self.frame, bg=settings.SECONDARY_BG, highlightthickness=0
         )
-        self.status_canvas.pack(side=tk.RIGHT, padx=30)
-        if (
-                quest.name in profile.completed_tasks and
-                float(profile.completed_tasks[quest.name]['score']) > 0
-        ):
-            self.status = tk.Label(
-                self.status_canvas, bg=settings.CONSP_BG,
-                text='Выполнено', fg=settings.ROOT_BG
-            )
-            self.status.pack(pady=5, padx=5, side=tk.LEFT)
-            self._img_yellow_zone = Images.IMG_YELLOW_ZONE
-            self.status_ok = tk.Label(
-                self.status_canvas, bg=settings.CONSP_BG, image=Images.IMG_OK
-            )
-            self.status_ok.pack(side=tk.RIGHT, padx=5)
-            self.status_yellow_zone = self.status_canvas.create_image(
-                0, 0, image=self._img_yellow_zone
-            )
-            self.status_canvas.bind('<Configure>', self._create_yellow_zone)
-
-        else:
-            self.status = tk.Label(
-                self.status_canvas, bg=settings.SECONDARY_BG,
-                text='Не выполнено', fg=settings.YELLOW
-            )
-            self.status.pack(pady=5, padx=5)
-            self.status_canvas.bind(
-                '<Configure>', lambda event: rounded_rect(
-                    self.status_canvas, 0, 0,
-                    event.width - 1, event.height - 1, 10
-                ))
-        if quest.name in profile.completed_tasks:
-            self.completed_tasks = tk.Label(
-                self.frame, font=settings.SMALL_FONT,
-                text='Выполнено заданий: {}'.format(
-                    profile.completed_tasks[quest.name]["completed_count"]),
-                bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-            )
-            self.score_tasks = tk.Label(
-                self.frame, font=settings.SMALL_FONT,
-                text='Получено баллов: '
-                     f'{profile.completed_tasks[quest.name]["score"]}',
-                bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-            )
-            self.try_count_tasks = tk.Label(
-                self.frame, font=settings.SMALL_FONT,
-                text='Количество прохождений: '
-                     f'{profile.completed_tasks[quest.name]["try_count"]}',
-                bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-            )
-            self.try_count_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
-            self.score_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
-            self.completed_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
+        if statistic:
+            self.status_canvas.pack(side=tk.RIGHT, padx=30)
+            if (
+                    quest.name in profile.completed_tasks and
+                    float(profile.completed_tasks[quest.name]['score']) > 0
+            ):
+                self.status = tk.Label(
+                    self.status_canvas, bg=settings.CONSP_BG,
+                    text='Выполнено', fg=settings.ROOT_BG
+                )
+                self.status.pack(pady=5, padx=5, side=tk.LEFT)
+                self._img_yellow_zone = Images.IMG_YELLOW_ZONE
+                self.status_ok = tk.Label(
+                    self.status_canvas, bg=settings.CONSP_BG,
+                    image=Images.IMG_OK
+                )
+                self.status_ok.pack(side=tk.RIGHT, padx=5)
+                self.status_yellow_zone = self.status_canvas.create_image(
+                    0, 0, image=self._img_yellow_zone
+                )
+                self.status_canvas.bind('<Configure>', self._create_yellow_zone)
+            else:
+                self.status = tk.Label(
+                    self.status_canvas, bg=settings.SECONDARY_BG,
+                    text='Не выполнено', fg=settings.YELLOW
+                )
+                self.status.pack(pady=5, padx=5)
+                self.status_canvas.bind(
+                    '<Configure>', lambda event: rounded_rect(
+                        self.status_canvas, 0, 0,
+                        event.width - 1, event.height - 1, 10
+                    ))
+            if quest.name in profile.completed_tasks:
+                self.completed_tasks = tk.Label(
+                    self.frame, font=settings.SMALL_FONT,
+                    text='Выполнено заданий: {}'.format(
+                        profile.completed_tasks[quest.name]["completed_count"]),
+                    bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+                )
+                self.score_tasks = tk.Label(
+                    self.frame, font=settings.SMALL_FONT,
+                    text='Получено баллов: '
+                         f'{profile.completed_tasks[quest.name]["score"]}',
+                    bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+                )
+                self.try_count_tasks = tk.Label(
+                    self.frame, font=settings.SMALL_FONT,
+                    text='Количество прохождений: '
+                         f'{profile.completed_tasks[quest.name]["try_count"]}',
+                    bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+                )
+                self.try_count_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
+                self.score_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
+                self.completed_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
         self.name.pack(side=tk.TOP, anchor=tk.NW)
-        self.tasks_count.pack(anchor=tk.NW)
+        if statistic:
+            self.tasks_count.pack(anchor=tk.NW)
         self.frame.pack(fill=tk.X, padx=10, pady=20)
         self.pack(fill=tk.X, pady=10)
         self.frame.bind('<Button-1>', lambda event: quest_preview_view(
-            home_view, _locals=_locals, quest=self.quest
+            last_view, _locals=_locals, quest=self.quest
         ))
         self.name.bind('<Button-1>', lambda event: quest_preview_view(
-            home_view, _locals=_locals, quest=self.quest
+            last_view, _locals=_locals, quest=self.quest
         ))
         self.bind('<Destroy>', lambda event: self.unbind_all('<Button-1>'))
 
@@ -433,12 +440,14 @@ def view(func):
 
 
 @view
-def log_in_view():
+def log_in_view(need_resize=False):
     """
     Страница авторизации.
     """
 
     root.geometry('620x465')
+    if need_resize:
+        root.resizable(False, False)
     root.title('Авторизация')
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
     canvas_input = tk.Canvas(
@@ -509,12 +518,14 @@ def log_in_view():
 
 
 @view
-def sign_in_view():
+def sign_in_view(need_resize=False):
     """
     Страница регистрации.
     """
 
     root.geometry('620x465')
+    if need_resize:
+        root.resizable(True, True)
     root.title('Регистрация')
     frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
     canvas_input = tk.Canvas(
@@ -658,7 +669,8 @@ def home_view(need_resize=True):
     _locals = locals()
     for quest in Quests.quests:
         QuestWidget(
-            frame_quests.scrollable_frame, quest=quest, _locals=_locals
+            frame_quests.scrollable_frame, last_view=home_view,
+            quest=quest, _locals=_locals
         )
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
@@ -684,6 +696,9 @@ def home_view(need_resize=True):
 
     root.bind('<Configure>', root_configure_handler)
     frame_main.bind('<Destroy>', lambda event: root.unbind('<Configure>'))
+    profile_name.bind(
+        '<Button-1>', lambda event: profile_view(_locals=_locals)
+    )
 
 
 @view
@@ -963,3 +978,76 @@ def connection_error_view(error_info: str = ''):
     frame_main.pack(pady=100)
     _locals = locals()
     root.after(5000, lambda: reconnection(interface, _locals))
+
+
+@view
+def profile_view(need_resize=False):
+    """
+    Страница, дающая информацию о профиле и статистику.
+    """
+
+    root.title(f'Профиль: {LOGIN}')
+    frame_main = tk.Frame(bg=settings.ROOT_BG)
+    frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    btn_go_back = tk.Button(
+        frame_tools, text='На главную', bg=settings.CONSP_BG,
+        fg=settings.CONSP_FG, font=settings.FONT
+    )
+    frame_quests = ScrollableFrame(frame_tools, width=200, side=tk.LEFT)
+    btn_go_back.pack(pady=20, anchor=tk.NW, padx=20)
+    frame_quests.pack(fill=tk.Y, expand=tk.TRUE)
+    frame_tools.pack(fill=tk.Y, side=tk.LEFT)
+    frame_content = tk.Frame(frame_main, bg=settings.ROOT_BG, bd=20)
+    canvas_profile = tk.Canvas(
+        frame_content, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone_profile = canvas_profile.create_image(
+        0, 0, image=Images.IMG_DARK_ZONE
+    )
+    frame_profile = tk.Frame(canvas_profile, bg=settings.SECONDARY_BG, bd=5)
+    profile_icon = tk.Canvas(frame_profile, width=45, height=45, bg='#FFF')
+    frame_profile_info = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
+    profile_name = tk.Label(
+        frame_profile_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        font=settings.FONT, text=LOGIN
+    )
+    profile_score = tk.Label(
+        frame_profile_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
+        text=f'Балов: {profile.score}'
+    )
+    profile_name.pack(side=tk.TOP, anchor=tk.NW)
+    profile_score.pack(anchor=tk.NW)
+    profile_icon.pack(side=tk.LEFT, padx=10)
+    frame_profile_info.pack(side=tk.LEFT)
+    btn_log_out = tk.Button(
+        frame_profile, text='Выйти', font=settings.FONT,
+        bg=settings.CONSP_BG, fg=settings.CONSP_FG
+    )
+    btn_log_out.pack(side=tk.RIGHT, padx=10)
+    frame_profile.pack(padx=10, pady=20, fill=tk.X)
+    canvas_profile.pack(fill=tk.X, pady=10)
+
+    def _create_dark_zone(event):
+        width, height = event.width, event.height
+        Images.IMG_DARK_ZONE_PROFILE = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(width, height), proportions=False
+        )
+        canvas_profile.coords(dark_zone_profile, width / 2, height / 2)
+        canvas_profile.itemconfig(
+            dark_zone_profile, image=Images.IMG_DARK_ZONE_PROFILE
+        )
+
+    canvas_profile.bind('<Configure>', _create_dark_zone)
+    frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
+    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
+    _locals = locals()
+    for quest in Quests.quests:
+        QuestWidget(
+            frame_quests.scrollable_frame, last_view=profile_view, quest=quest,
+            _locals=_locals, statistic=False, max_length=10
+        )
+    btn_go_back.bind('<Button-1>', lambda event: home_view(
+        need_resize=False, _locals=_locals
+    ))
+    btn_log_out.bind('<Button-1>', lambda event: log_out(interface, _locals))
