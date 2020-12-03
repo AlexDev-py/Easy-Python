@@ -14,8 +14,8 @@ from attrdict import AttrMap
 
 import interface
 
-HOST = 'http://127.0.0.1:5000/'
-# HOST = 'http://easypython.pythonanywhere.com/'
+# HOST = 'http://127.0.0.1:5000/'
+HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
 
 if os.path.exists('.auth'):
