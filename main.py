@@ -14,8 +14,8 @@ from attrdict import AttrMap
 
 import interface
 
-# HOST = 'http://127.0.0.1:5000/'
-HOST = 'http://easypython.pythonanywhere.com/'
+HOST = 'http://127.0.0.1:5000/'
+# HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
 
 if os.path.exists('.auth'):
@@ -93,6 +93,9 @@ def sign_in(
     if login == '':
         _locals['entry_login'].focus()
         root.Alert.show('Введите логин')
+    elif len(login) > 20:
+        _locals['entry_login'].focus()
+        root.Alert.show('Логин не должен быть длиннее 20 символов')
     elif password == '':
         _locals['entry_password'].focus()
         root.Alert.show('Введите пароль')
@@ -130,10 +133,19 @@ def complete_quest(root: Any, quest_data: "interface.QuestProcess"):
     """
 
     root.profile = AttrMap(request(
-        f'profile/{USER_ID}/quest/{quest_data.quest.name}',
+        f'profile/{root.USER_ID}/quest/{quest_data.quest.name}',
         completed_count=f'{quest_data.completed_count}',
         score=f'{quest_data.score}'
     ))
+
+
+def get_stats(root: Any) -> AttrMap:
+    """
+    Выдаем статистику
+    :return: {stats: [dict(name, score) for user], me: position}
+    """
+
+    return AttrMap(request('stats', login=root.LOGIN))
 
 
 def _main(root: Any, _locals: dict = None):
@@ -142,11 +154,9 @@ def _main(root: Any, _locals: dict = None):
             root.profile = AttrMap(request(f'profile/{USER_ID}'))
             root.home_view(_locals=_locals)
         else:
-            root.Alert.prepare()
             os.remove('.auth')
             root.log_in_view(_locals=_locals)
     else:
-        root.Alert.prepare()
         request('test')
         root.log_in_view(_locals=_locals)
 

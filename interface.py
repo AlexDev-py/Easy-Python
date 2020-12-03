@@ -17,7 +17,7 @@ from PIL import ImageTk, Image
 
 from sources.quests.quests import Quests, Quest, Task
 from main import (
-    log_in, sign_in, log_out, complete_quest, reconnection,
+    log_in, sign_in, log_out, complete_quest, get_stats, reconnection,
     USER_NAME, USER_ID, LOGIN, interface, AttrMap
 )
 
@@ -90,6 +90,7 @@ class Alert:
         Подготовка поля для вывода уведомлений.
         """
 
+        cls.alert_frame = tk.Frame(root, bg=settings.ROOT_BG)
         cls.alert_frame.pack(side='top', fill='x')
         cls.show('Подготовка...', show_time=1)
 
@@ -288,6 +289,27 @@ class TaskLabel(tk.Label):
         self.pack(anchor=tk.NW)
 
 
+class TopUserLabel(tk.Frame):
+    """
+    Виджет пользователя из топа по рейтингу
+    """
+
+    def __init__(self, master, position: int, name: str, score: int, pady=0):
+        super().__init__(
+            master, bg=settings.ROOT_BG if name != LOGIN else settings.CONSP_BG,
+            width=200
+        )
+        bg = settings.ROOT_BG if name != LOGIN else settings.CONSP_BG
+        fg = settings.ROOT_FG if name != LOGIN else settings.ROOT_BG
+        self.lb_position = tk.Label(self, bg=bg, fg=fg, text=f'{position}')
+        self.lb_name = tk.Label(self, bg=bg, fg=fg, text=f'{name}')
+        self.lb_score = tk.Label(self, bg=bg, fg=fg, text=f'{score}')
+        self.lb_position.pack(side=tk.LEFT, padx=2)
+        self.lb_name.pack(side=tk.LEFT, padx=2)
+        self.lb_score.pack(side=tk.RIGHT, padx=5)
+        self.pack(fill=tk.X, pady=pady)
+
+
 def open_img(
         path: str, size: tuple = (80, 50),
         proportions=True, need_resize=True
@@ -350,6 +372,10 @@ class Images:
     IMG_SIGN_IN = open_img(dp + 'btn_sign_in.png', size=(180, 70))
     IMG_RUN = open_img(dp + 'btn_run.png', size=(160, 60))
     IMG_CANCEL = open_img(dp + 'btn_cancel.png', size=(160, 60))
+    IMG_CONTINUE = open_img(dp + 'btn_continue.png', size=(160, 60))
+    IMG_GO_BACK = open_img(dp + 'btn_go_back.png', size=(160, 60))
+    IMG_STOP_TEST = open_img(dp + 'btn_stop_test.png', size=(160, 60))
+    IMG_EXIT = open_img(dp + 'btn_exit.png', size=(110, 25))
     IMG_OK = open_img(dp + 'ok.png', size=(10, 10))
     IMG_DARK_ZONE = open_img(dp + 'dark_zone.png', need_resize=False)
     IMG_YELLOW_ZONE = open_img(dp + 'yellow_zone.png', need_resize=False)
@@ -445,6 +471,7 @@ def log_in_view(need_resize=False):
     Страница авторизации.
     """
 
+    Alert.prepare()
     root.geometry('620x465')
     if need_resize:
         root.resizable(False, False)
@@ -618,9 +645,9 @@ def home_view(need_resize=True):
 
     Alert.alert_frame.destroy()
     root.title('Easy-Python: Учить Python легко!')
+    root.minsize(650, 400)
     if need_resize:
         root.geometry('800x500')
-        root.minsize(650, 400)
         root.resizable(True, True)
     frame_main = tk.Frame(bg=settings.ROOT_BG)
     frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG, bd=10)
@@ -807,9 +834,8 @@ def quest_view(last_view, quest: Quest):
         frame_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         font=settings.BIG_FONT, textvariable=quest_proc.time_var
     )
-    btn_exit = tk.Button(
-        frame_info, bg=settings.CONSP_BG, fg=settings.CONSP_FG,
-        text='Завершить тестирование'
+    btn_exit = tk.Label(
+        frame_info, image=Images.IMG_STOP_TEST, bg=settings.SECONDARY_BG
     )
     time_limit.pack(side=tk.TOP, anchor=tk.SW)
     btn_exit.pack(anchor=tk.SW, pady=15)
@@ -945,7 +971,7 @@ def quest_results_view(last_view, quest_proc: QuestProcess):
     canvas_info.bind('<Configure>', _create_dark_zone)
     frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
     btn_continue = tk.Label(
-        frame_btns, image=Images.IMG_RUN, bg=settings.ROOT_BG
+        frame_btns, image=Images.IMG_CONTINUE, bg=settings.ROOT_BG
     )
     btn_continue.pack()
     frame_btns.pack(pady=30)
@@ -986,12 +1012,13 @@ def profile_view(need_resize=False):
     Страница, дающая информацию о профиле и статистику.
     """
 
+    stats = get_stats(interface)
     root.title(f'Профиль: {LOGIN}')
+    root.minsize(800, 500)
     frame_main = tk.Frame(bg=settings.ROOT_BG)
     frame_tools = tk.Frame(frame_main, bg=settings.ROOT_BG)
-    btn_go_back = tk.Button(
-        frame_tools, text='На главную', bg=settings.CONSP_BG,
-        fg=settings.CONSP_FG, font=settings.FONT
+    btn_go_back = tk.Label(
+        frame_tools, image=Images.IMG_GO_BACK, bg=settings.ROOT_BG
     )
     frame_quests = ScrollableFrame(frame_tools, width=200, side=tk.LEFT)
     btn_go_back.pack(pady=20, anchor=tk.NW, padx=20)
@@ -1007,9 +1034,28 @@ def profile_view(need_resize=False):
     frame_profile = tk.Frame(canvas_profile, bg=settings.SECONDARY_BG, bd=5)
     profile_icon = tk.Canvas(frame_profile, width=45, height=45, bg='#FFF')
     frame_profile_info = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
+    # Форматируем логин пользователя для корректного отображения
+    if len(LOGIN) <= 15:
+        login = LOGIN
+    else:
+        if ' ' not in LOGIN:
+            login = LOGIN[:12] + '...'
+        else:
+            login = LOGIN.split()
+            login_begin = login[0]
+            del login[0]
+            if len(login_begin) <= 15:
+                for obj in login:
+                    if len(login_begin + obj) >= 15:
+                        break
+                    login_begin += ' ' + obj
+                    del login[0]
+            else:
+                login_begin = login_begin[:12] + '...'
+            login = login_begin + '\n' + ' '.join(login)
     profile_name = tk.Label(
         frame_profile_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        font=settings.FONT, text=LOGIN
+        font=settings.FONT, text=login, justify=tk.LEFT
     )
     profile_score = tk.Label(
         frame_profile_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
@@ -1019,15 +1065,14 @@ def profile_view(need_resize=False):
     profile_score.pack(anchor=tk.NW)
     profile_icon.pack(side=tk.LEFT, padx=10)
     frame_profile_info.pack(side=tk.LEFT)
-    btn_log_out = tk.Button(
-        frame_profile, text='Выйти', font=settings.FONT,
-        bg=settings.CONSP_BG, fg=settings.CONSP_FG
+    btn_log_out = tk.Label(
+        frame_profile, image=Images.IMG_EXIT, bg=settings.SECONDARY_BG
     )
     btn_log_out.pack(side=tk.RIGHT, padx=10)
     frame_profile.pack(padx=10, pady=20, fill=tk.X)
     canvas_profile.pack(fill=tk.X, pady=10)
 
-    def _create_dark_zone(event):
+    def _create_dark_zone_profile(event):
         width, height = event.width, event.height
         Images.IMG_DARK_ZONE_PROFILE = open_img(
             Images.dp + 'dark_zone.png',
@@ -1038,7 +1083,96 @@ def profile_view(need_resize=False):
             dark_zone_profile, image=Images.IMG_DARK_ZONE_PROFILE
         )
 
-    canvas_profile.bind('<Configure>', _create_dark_zone)
+    canvas_profile.bind('<Configure>', _create_dark_zone_profile)
+    frame_stat = tk.Frame(frame_content, bg=settings.ROOT_BG)
+    canvas_stat = tk.Canvas(
+        frame_stat, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone_stat = canvas_stat.create_image(
+        0, 0, image=Images.IMG_DARK_ZONE
+    )
+    frame_global_stats = tk.Frame(canvas_stat, bg=settings.SECONDARY_BG)
+    lb_global_stats = tk.Label(
+        frame_global_stats, text='Топ-10', font=settings.FONT,
+        bg=settings.SECONDARY_BG, fg=settings.ROOT_FG
+    )
+    lb_global_stats.pack(anchor=tk.NW)
+    for i, user in enumerate(stats['stats']):
+        TopUserLabel(
+            frame_global_stats, name=user['name'],
+            position=i + 1, score=user['score']
+        )
+    TopUserLabel(
+        frame_global_stats, name=LOGIN,
+        position=stats['me'] + 1, score=profile.score, pady=10
+    )
+    frame_global_stats.pack(padx=20, pady=20)
+    canvas_stat.pack(side=tk.LEFT, anchor=tk.NW)
+    canvas_user_stat = tk.Canvas(
+        frame_stat, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone_user_stat = canvas_user_stat.create_image(
+        0, 0, image=Images.IMG_DARK_ZONE
+    )
+    frame_user_stat = tk.Frame(canvas_user_stat, bg=settings.SECONDARY_BG)
+    lb_user_stat = tk.Label(
+        frame_user_stat, justify=tk.LEFT,
+        text='Статистика профиля:\n\n'
+             'Начато тестов: {all_quests}\nЗавершено: {completed}\n'
+             'Завершено на 100%: {all_completed}\n'
+             'Максимальный балл за тест: {max_score}\n'
+             'Минимальный балл за тест: {min_score}\n'
+             'Всего решено задач: {count_all_tasks}'.format(
+                all_quests=len(profile.completed_tasks),
+                completed=len([
+                    True for quest in profile.completed_tasks.values()
+                    if float(quest["score"]) > 0]),
+                all_completed=len([
+                    True for quest in profile.completed_tasks.values()
+                    if float(quest['score']) == 10.0]),
+                max_score=max([
+                    float(quest['score'])
+                    for quest in profile.completed_tasks.values()]),
+                min_score=min([
+                    float(quest['score'])
+                    for quest in profile.completed_tasks.values()]),
+                count_all_tasks=sum([
+                    int(quest['completed_count'])
+                    for quest in profile.completed_tasks.values()])
+        ),
+        bg=settings.SECONDARY_BG, fg=settings.ROOT_FG, font=settings.SMALL_FONT
+    )
+    lb_user_stat.pack()
+    frame_user_stat.pack(padx=20, pady=20)
+    canvas_user_stat.pack(side=tk.LEFT, anchor=tk.NW, padx=5)
+    frame_stat.pack(fill=tk.BOTH, expand=tk.TRUE)
+
+    def _create_dark_zone_stat(event):
+        width, height = event.width, event.height
+        Images.IMG_DARK_ZONE_STAT = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(width, height - 10), proportions=False
+        )
+        canvas_stat.coords(dark_zone_stat, width / 2, height / 2)
+        canvas_stat.itemconfig(
+            dark_zone_stat, image=Images.IMG_DARK_ZONE_STAT
+        )
+
+    canvas_stat.bind('<Configure>', _create_dark_zone_stat)
+
+    def _create_dark_zone_stat(event):
+        width, height = event.width, event.height
+        Images.IMG_DARK_ZONE_USER_STAT = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(width, height - 10), proportions=False
+        )
+        canvas_user_stat.coords(dark_zone_user_stat, width / 2, height / 2)
+        canvas_user_stat.itemconfig(
+            dark_zone_user_stat, image=Images.IMG_DARK_ZONE_USER_STAT
+        )
+
+    canvas_user_stat.bind('<Configure>', _create_dark_zone_stat)
+
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
     _locals = locals()
