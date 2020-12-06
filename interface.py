@@ -173,7 +173,7 @@ class QuestWidget(tk.Canvas):
             text=(
                 quest.name if not max_length or len(quest.name) <= max_length
                 else quest.name[:max_length-1].strip() + '...'),
-            bg=settings.SECONDARY_BG, fg=settings.ROOT_FG
+            bg=settings.SECONDARY_BG, fg=settings.ROOT_FG, justify=tk.LEFT
         )
         self.tasks_count = tk.Label(
             self.frame, text=f'Количество заданий: {quest.tasks_count}',
@@ -185,13 +185,15 @@ class QuestWidget(tk.Canvas):
         )
         if statistic:
             self.status_canvas.pack(side=tk.RIGHT, padx=30)
-            if (
-                    quest.name in profile.completed_tasks and
-                    float(profile.completed_tasks[quest.name]['score']) > 0
-            ):
+            if quest.name in profile.completed_tasks:
                 self.status = tk.Label(
                     self.status_canvas, bg=settings.CONSP_BG,
-                    text='Выполнено', fg=settings.ROOT_BG
+                    text=(
+                        'Выполнено'
+                        if int(profile.completed_tasks[quest.name]['score']) > 0
+                        else 'Провалено'
+                    ),
+                    fg=settings.ROOT_BG
                 )
                 self.status.pack(pady=5, padx=5, side=tk.LEFT)
                 self._img_yellow_zone = Images.IMG_YELLOW_ZONE
@@ -199,23 +201,12 @@ class QuestWidget(tk.Canvas):
                     self.status_canvas, bg=settings.CONSP_BG,
                     image=Images.IMG_OK
                 )
-                self.status_ok.pack(side=tk.RIGHT, padx=5)
+                if int(profile.completed_tasks[quest.name]['score']) > 0:
+                    self.status_ok.pack(side=tk.RIGHT, padx=5)
                 self.status_yellow_zone = self.status_canvas.create_image(
                     0, 0, image=self._img_yellow_zone
                 )
                 self.status_canvas.bind('<Configure>', self._create_yellow_zone)
-            else:
-                self.status = tk.Label(
-                    self.status_canvas, bg=settings.SECONDARY_BG,
-                    text='Не выполнено', fg=settings.YELLOW
-                )
-                self.status.pack(pady=5, padx=5)
-                self.status_canvas.bind(
-                    '<Configure>', lambda event: rounded_rect(
-                        self.status_canvas, 0, 0,
-                        event.width - 1, event.height - 1, 10
-                    ))
-            if quest.name in profile.completed_tasks:
                 self.completed_tasks = tk.Label(
                     self.frame, font=settings.SMALL_FONT,
                     text='Выполнено заданий: {}'.format(
@@ -228,26 +219,43 @@ class QuestWidget(tk.Canvas):
                          f'{profile.completed_tasks[quest.name]["score"]}',
                     bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
                 )
-                self.try_count_tasks = tk.Label(
-                    self.frame, font=settings.SMALL_FONT,
-                    text='Количество прохождений: '
-                         f'{profile.completed_tasks[quest.name]["try_count"]}',
-                    bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-                )
-                self.try_count_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
                 self.score_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
                 self.completed_tasks.pack(side=tk.BOTTOM, anchor=tk.NW)
+            else:
+                self.status = tk.Label(
+                    self.status_canvas, bg=settings.SECONDARY_BG,
+                    text='Не выполнено', fg=settings.YELLOW
+                )
+                self.status.pack(pady=5, padx=5)
+                self.status_canvas.bind(
+                    '<Configure>', lambda event: rounded_rect(
+                        self.status_canvas, 0, 0,
+                        event.width - 1, event.height - 1, 10
+                    ))
         self.name.pack(side=tk.TOP, anchor=tk.NW)
         if statistic:
             self.tasks_count.pack(anchor=tk.NW)
         self.frame.pack(fill=tk.X, padx=10, pady=20)
         self.pack(fill=tk.X, pady=10)
-        self.frame.bind('<Button-1>', lambda event: quest_preview_view(
-            last_view, _locals=_locals, quest=self.quest
-        ))
-        self.name.bind('<Button-1>', lambda event: quest_preview_view(
-            last_view, _locals=_locals, quest=self.quest
-        ))
+        if not (th_q := profile.completed_tasks.get(self.quest.name)):
+            def _func():
+                quest_preview_view(
+                    last_view, _locals=_locals, quest=self.quest
+                )
+        else:
+            def _func():
+                th_q['answers'] = {
+                    int(key): value for key, value in th_q['answers'].items()
+                }
+                quest_results_view(
+                    last_view, quest_proc=QuestProcess(
+                        self.quest, None, None, answers=th_q['answers'],
+                        completed_count=th_q['completed_count'],
+                        score=th_q['score']),
+                    _locals=_locals
+                )
+        self.frame.bind('<Button-1>', lambda event: _func())
+        self.name.bind('<Button-1>', lambda event: _func())
         self.bind('<Destroy>', lambda event: self.unbind_all('<Button-1>'))
 
     def _create_dark_zone(self, event):
@@ -413,8 +421,9 @@ class QuestProcess:
         self.time_var = tk.StringVar(
             value=f'{self.time // 60}м {self.time % 60}с'
         )
-        self.answers = {i: '' for i in range(len(self.quest.tasks))}
-        root.after(1000, self.timer)
+        if self.answers is None:
+            self.answers = {i: '' for i in range(len(self.quest.tasks))}
+            root.after(1000, self.timer)
 
     def timer(self):
         """
@@ -436,10 +445,28 @@ class QuestProcess:
 
         self.process = False
         self.update_answer()
-        self.completed_count = len([
-            True for i, task in enumerate(self.quest.tasks)
-            if task.answer == self.answers[i]
-        ])
+        self.completed_count = 0
+        for i, task in enumerate(self.quest.tasks):
+            if isinstance(task.answer, set):
+                try:
+                    if (
+                            not self.answers[i].startswith('{') and
+                            not self.answers[i].endswith('}')
+                    ):
+                        continue
+                    answ = eval(
+                        self.answers[i].replace('}', ']').replace('{', '[')
+                    )
+                    if (
+                            len(answ) == len(set(answ)) == len(task.answer)
+                            and set(answ) == task.answer
+                    ):
+                        self.completed_count += 1
+                except SyntaxError:
+                    pass
+            else:
+                if task.answer == self.answers[i]:
+                    self.completed_count += 1
         self.score = round(
             self.completed_count / self.quest.tasks_count * 10, 2
         )
@@ -694,11 +721,10 @@ def home_view(need_resize=True):
     Alert.show('Подготовка...', show_time=1)
     frame_quests = ScrollableFrame(frame_content)
     _locals = locals()
-    for quest in Quests.quests:
-        QuestWidget(
-            frame_quests.scrollable_frame, last_view=home_view,
-            quest=quest, _locals=_locals
-        )
+    quest_widgets = [QuestWidget(
+        frame_quests.scrollable_frame, last_view=home_view,
+        quest=quest, _locals=_locals
+    ) for quest in Quests.quests]
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
@@ -720,6 +746,16 @@ def home_view(need_resize=True):
                 profile_name.config(text=USER_NAME)
             else:
                 profile_name.config(text=USER_NAME[:12].strip() + '...')
+        if root.winfo_width() < 750:
+            for quest_widget in quest_widgets:
+                if len(quest_widget.quest.name) > 18:
+                    if space := quest_widget.quest.name.rfind(' '):
+                        text = list(quest_widget.quest.name)
+                        text[space] = '\n'
+                        quest_widget.name.config(text=''.join(text))
+        else:
+            for quest_widget in quest_widgets:
+                quest_widget.name.config(text=quest_widget.quest.name)
 
     root.bind('<Configure>', root_configure_handler)
     frame_main.bind('<Destroy>', lambda event: root.unbind('<Configure>'))
@@ -788,11 +824,12 @@ def quest_preview_view(last_view, quest: Quest):
 
 
 @view
-def quest_view(last_view, quest: Quest):
+def quest_view(last_view, quest: Quest, _quest_proc: QuestProcess = None):
     """
     Страница тестирования.
     :param last_view: Пред идущая страница.
     :param quest: Данные о выбранном задании.
+    :param _quest_proc: Данные об уже пройденном тестировании.
     """
 
     def update_answer():
@@ -800,8 +837,9 @@ def quest_view(last_view, quest: Quest):
         Обновляем ответ
         """
 
-        quest_proc.answers[quest_proc.selected_task_index] =\
-            input_answer.get(1.0, tk.END).strip()
+        if quest_proc.selected_task_index is not None:
+            quest_proc.answers[quest_proc.selected_task_index] =\
+                input_answer.get(1.0, tk.END).strip('\n')
 
     def stop_quest_control():
         """
@@ -816,7 +854,7 @@ def quest_view(last_view, quest: Quest):
             Alert.show('Тестирование завершено')
             quest_proc.stop_quest()
 
-    quest_proc = QuestProcess(
+    quest_proc = _quest_proc or QuestProcess(
         quest=quest, last_view=last_view, update_answer=update_answer
     )
     Alert.alert_frame.destroy()
@@ -835,9 +873,11 @@ def quest_view(last_view, quest: Quest):
         font=settings.BIG_FONT, textvariable=quest_proc.time_var
     )
     btn_exit = tk.Label(
-        frame_info, image=Images.IMG_STOP_TEST, bg=settings.SECONDARY_BG
+        frame_info, bg=settings.SECONDARY_BG,
+        image=Images.IMG_STOP_TEST if not _quest_proc else Images.IMG_GO_BACK
     )
-    time_limit.pack(side=tk.TOP, anchor=tk.SW)
+    if not _quest_proc:
+        time_limit.pack(side=tk.TOP, anchor=tk.SW)
     btn_exit.pack(anchor=tk.SW, pady=15)
     frame_info.pack(padx=10, pady=10)
     frame_tools.pack(side=tk.TOP, pady=5, padx=10)
@@ -875,12 +915,25 @@ def quest_view(last_view, quest: Quest):
         input_answer.insert(1.0, quest_proc.answers[task_index])
         tz_zone.config(state=tk.NORMAL)
         tz_zone.delete(1.0, tk.END)
-        tz_zone.insert(1.0, selected_task.task)
+        if _quest_proc:
+            tz_zone.insert(
+                1.0, (
+                    'Решено верно\n\n'
+                    if quest_proc.answers[task_index] == selected_task.answer
+                    else 'Решено не верно\n\n'
+                )
+            )
+        tz_zone.insert(tk.END, selected_task.task)
+        if _quest_proc:
+            tz_zone.insert(
+                tk.END, f'\n\nПравильный ответ:\n{selected_task.answer}'
+            )
         tz_zone.config(state=tk.DISABLED)
 
     for i, task in enumerate(quest.tasks):
         TaskLabel(
-            frame_tasks.scrollable_frame, text=f'{i}. {task.question[:20]}...',
+            frame_tasks.scrollable_frame,
+            text=f'{i + 1}. {task.question[:20]}...',
             task_index=i, task=task, open_task=open_task,
             bg=settings.ROOT_BG, fg=settings.ROOT_FG,
         )
@@ -912,13 +965,18 @@ def quest_view(last_view, quest: Quest):
     frame_content.bind('<Configure>', lambda event: tz_zone.config(
         height=event.height * 0.7 / 20
     ))
-    btn_exit.bind('<Button-1>', lambda event: stop_quest_control())
     lb_tz.pack(pady=3, padx=10, anchor=tk.W)
     tz_zone.pack(fill=tk.X, padx=10)
     input_answer.pack(fill=tk.X, pady=5, padx=10)
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
     _locals = locals()
+    if not _quest_proc:
+        btn_exit.bind('<Button-1>', lambda event: stop_quest_control())
+    else:
+        btn_exit.bind('<Button-1>', lambda event: last_view(
+            need_resize=False, _locals=_locals
+        ))
     quest_proc.widgets = _locals
 
 
@@ -947,10 +1005,7 @@ def quest_results_view(last_view, quest_proc: QuestProcess):
             f'"{quest_proc.quest.name}"\n'
             f'Вы выполнили {quest_proc.completed_count} '
             f'из {quest_proc.quest.tasks_count} заданий\n'
-            f'и набрали {quest_proc.score} баллов!' + (
-                '\nВы можете пройти тестирование заново\n'
-                'и повысить свои результаты!'
-                if quest_proc.score != 10 else '')
+            f'и набрали {quest_proc.score} баллов!'
         ),
         bg=settings.SECONDARY_BG, fg=settings.ROOT_FG
     )
@@ -973,12 +1028,20 @@ def quest_results_view(last_view, quest_proc: QuestProcess):
     btn_continue = tk.Label(
         frame_btns, image=Images.IMG_CONTINUE, bg=settings.ROOT_BG
     )
+    btn_learn = tk.Label(
+        frame_btns, text='Подробнее', font=settings.SMALL_FONT,
+        bg=settings.ROOT_BG, fg=settings.ROOT_FG
+    )
     btn_continue.pack()
+    btn_learn.pack(pady=10)
     frame_btns.pack(pady=30)
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
     _locals = locals()
     btn_continue.bind('<Button-1>', lambda event: last_view(
         need_resize=False, _locals=_locals
+    ))
+    btn_learn.bind('<Button-1>', lambda event: quest_view(
+        last_view, quest_proc.quest, quest_proc, _locals=_locals
     ))
 
 
@@ -1130,16 +1193,19 @@ def profile_view(need_resize=False):
                 all_completed=len([
                     True for quest in profile.completed_tasks.values()
                     if float(quest['score']) == 10.0]),
-                max_score=max([
-                    float(quest['score'])
-                    for quest in profile.completed_tasks.values()]),
-                min_score=min([
-                    float(quest['score'])
-                    for quest in profile.completed_tasks.values()]),
+                max_score=(
+                    max([
+                        float(quest['score'])
+                        for quest in profile.completed_tasks.values()])
+                    if len(profile.completed_tasks) else 0),
+                min_score=(
+                    min([
+                        float(quest['score'])
+                        for quest in profile.completed_tasks.values()])
+                    if len(profile.completed_tasks) else 0),
                 count_all_tasks=sum([
                     int(quest['completed_count'])
-                    for quest in profile.completed_tasks.values()])
-        ),
+                    for quest in profile.completed_tasks.values()])),
         bg=settings.SECONDARY_BG, fg=settings.ROOT_FG, font=settings.SMALL_FONT
     )
     lb_user_stat.pack()
@@ -1185,3 +1251,67 @@ def profile_view(need_resize=False):
         need_resize=False, _locals=_locals
     ))
     btn_log_out.bind('<Button-1>', lambda event: log_out(interface, _locals))
+
+
+@view
+def history_view():
+    """
+    Страница показывающая сюжет.
+    """
+
+    root.geometry('900x700')
+
+    frame_main = tk.Frame(bg=settings.ROOT_BG, bd=5)
+    canvas_info = tk.Canvas(
+        frame_main, bg=settings.ROOT_BG, highlightthickness=0
+    )
+    dark_zone = canvas_info.create_image(0, 0, image=Images.IMG_DARK_ZONE)
+    canvas_info.pack()
+    frame_info = tk.Frame(canvas_info, bg=settings.SECONDARY_BG, bd=10)
+    lb_info = tk.Label(
+        frame_info, font=settings.FONT,
+        text="""
+        В одном селе живёт мальчик Слава.
+        В его селе нету доступа в интернет, но Слава несколько раз ездил
+        с родителями в ближайший город к родственникам.
+        Там он впервые узнал про такой язык программирования, как Питон,
+        и заинтересовался программированием.
+        Он захотел стать программистом, но в его селе это очень сложно сделать,
+        из-за отсутствия интернета.
+        На день рождения его лучший друг Олег подарил ему книгу про Питон.
+        В этой книге есть много интересного и полезного о Питоне и
+        Слава может начать его изучение при помощи этой книжки,
+        но авторы учебника очень хитрые, и в некоторых заданиях
+        намеренно допущена ошибка, которую нужно найти и
+        определить её название.
+        Но у Славы даже нет компьютера и ему приходится,
+        опираясь на материалы учебника, самому понимать,
+        что делает тот или иной код.
+        Помоги Славе стать программистом и разобраться в Питоне.
+        """,
+        bg=settings.SECONDARY_BG, fg=settings.ROOT_FG
+    )
+    lb_info.pack()
+    frame_info.pack(padx=22, pady=20)
+
+    def _create_dark_zone(event):
+        width, height = event.width, event.height
+        Images.IMG_DARK_ZONE_PREVIEW_QUEST = open_img(
+            Images.dp + 'dark_zone.png',
+            size=(width, height), proportions=False
+        )
+        canvas_info.coords(dark_zone, width / 2, height / 2)
+        canvas_info.itemconfig(
+            dark_zone, image=Images.IMG_DARK_ZONE_PREVIEW_QUEST
+        )
+
+    canvas_info.bind('<Configure>', _create_dark_zone)
+    frame_btns = tk.Frame(frame_main, bg=settings.ROOT_BG)
+    btn_continue = tk.Label(
+        frame_btns, image=Images.IMG_CONTINUE, bg=settings.ROOT_BG
+    )
+    btn_continue.pack()
+    frame_btns.pack(pady=30)
+    frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=30)
+    _locals = locals()
+    btn_continue.bind('<Button-1>', lambda event: home_view(_locals=_locals))

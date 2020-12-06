@@ -101,6 +101,14 @@ class Quests:
 
     quests = []
 
+    @classmethod
+    def default_sort(cls) -> List[Quest]:
+        """
+        Сортирует темы по индексации
+        """
+
+        return sorted(cls.quests, key=lambda x: x.position_index)
+
 
 @dataclass
 class Task:
@@ -140,7 +148,7 @@ class Task:
             input_data = input_data.group('input_data')
             input_data = [
                 d.group('d')
-                for d in re.finditer(r'<(?P<d>[^>])>', input_data)
+                for d in re.finditer(r'<(?P<d>[^>]+)>', input_data)
             ]
 
         if self.answer == '':
@@ -158,16 +166,21 @@ class Task:
                 for i, obj in enumerate(code):
                     self.code += obj
                     if i < len(input_data):
-                        self.code += input_data[i]
+                        self.code += f'"{input_data[i]}"'
 
-            exec(self.code)
+            try:
+                exec(self.code)
+            except Exception:
+                print(self.code)
+            if isinstance(self.answer, str):
+                self.answer = self.answer.rstrip('\n')
 
     def _print(self, *args, sep=' ', end='\n'):
+        if len(args) and isinstance(args[0], set):
+            self.answer = args[0]
+            return
         text = sep.join(map(str, args))
-        if self.answer == '':
-            self.answer += text
-        else:
-            self.answer += end + text
+        self.answer += text + end
 
 
 @dataclass
@@ -184,6 +197,8 @@ class Quest:
     time_limit: int
     """ Список заданий """
     tasks: List[Task]
+    """ Позиция на которой должна стоять тема """
+    position_index: int
 
     def __post_init__(self):
         Quests.quests.append(self)
@@ -201,6 +216,11 @@ for root, dirs, files in os.walk(PATH):
                 )
                 tasks_count = _data.group('tasks_count')
                 time_limit = _data.group('time_limit')
+                if index := re.search(
+                    r'index::(?P<index>\d+)', quest_data,
+                    flags=re.MULTILINE
+                ):
+                    index = int(index.group('index'))
                 tasks = re.finditer(
                     r'::\((?P<task>.+?)\)::', quest_data,
                     flags=re.DOTALL
@@ -210,5 +230,8 @@ for root, dirs, files in os.walk(PATH):
                     name=file_name.split('.txt')[0],
                     tasks_count=int(tasks_count),
                     time_limit=int(time_limit),
-                    tasks=[Task(t.group('task').strip()) for t in tasks]
+                    tasks=[Task(t.group('task').strip()) for t in tasks],
+                    position_index=index or 100
                 )
+
+Quests.quests = Quests.default_sort()

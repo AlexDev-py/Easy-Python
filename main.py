@@ -14,8 +14,8 @@ from attrdict import AttrMap
 
 import interface
 
-# HOST = 'http://127.0.0.1:5000/'
-HOST = 'http://easypython.pythonanywhere.com/'
+HOST = 'http://127.0.0.1:5000/'
+# HOST = 'http://easypython.pythonanywhere.com/'
 SERVER_ALLOWED = True
 
 if os.path.exists('.auth'):
@@ -77,7 +77,7 @@ def log_in(root: Any, _locals: dict, login: str, password: str):
         root.LOGIN = login
         root.USER_NAME, root.USER_ID = login.split('#')
         root.profile = AttrMap(request(f'profile/{root.USER_ID}'))
-        root.home_view(_locals=_locals)
+        root.history_view(_locals=_locals)
     else:
         root.Alert.show('Неправильный логин или пароль')
 
@@ -115,7 +115,7 @@ def sign_in(
         root.LOGIN = response['login']
         root.USER_NAME, root.USER_ID = response['login'].split('#')
         root.profile = AttrMap(request(f'profile/{root.USER_ID}'))
-        root.home_view(_locals=_locals)
+        root.history_view(_locals=_locals)
 
 
 def log_out(root: Any, _locals: dict):
@@ -135,7 +135,7 @@ def complete_quest(root: Any, quest_data: "interface.QuestProcess"):
     root.profile = AttrMap(request(
         f'profile/{root.USER_ID}/quest/{quest_data.quest.name}',
         completed_count=f'{quest_data.completed_count}',
-        score=f'{quest_data.score}'
+        score=f'{quest_data.score}', answers=f'[{quest_data.answers}]'
     ))
 
 
