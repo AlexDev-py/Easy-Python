@@ -64,7 +64,7 @@ index::2
 ::answer::<TypeError>::
 >>> number = input()
 >>> k = number % 8
->>> k =  number + k
+>>> k = number + k
 >>> k = k * 100
 >>> print(k)
 )::
@@ -84,7 +84,7 @@ index::2
 ::input::<121>::
 >>> number = int(input())
 >>> z = number % 100
->>> z = z + number
+>>> z += number
 >>> print(z)
 )::
 
@@ -94,7 +94,7 @@ index::2
 >>> number = float(input())
 >>> z = number // 2
 >>> p = number * 3
->>> k = number % 10
+>>> k = int(number) % 10
 >>> print(((z + p) * k) * 100)
 )::
 
