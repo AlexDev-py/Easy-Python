@@ -91,8 +91,6 @@ import re
 import os
 from dataclasses import dataclass
 
-PATH = 'sources/quests/' if __name__ != '__main__' else ''
-
 
 class Quests:
     """
@@ -204,7 +202,7 @@ class Quest:
         Quests.quests.append(self)
 
 
-for root, dirs, files in os.walk(PATH):
+for root, dirs, files in os.walk('sources/quests/'):
     for file_name in files:
         if file_name.endswith('.txt'):
             with open(f'{root}/{file_name}', encoding='utf-8') as file:

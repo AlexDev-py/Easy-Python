@@ -8,6 +8,7 @@
 import os
 import subprocess
 from typing import Any
+from tkinter import filedialog
 
 import requests
 from attrdict import AttrMap
@@ -55,6 +56,29 @@ def reconnection(root: Any, _locals: dict):
     except (requests.ConnectionError, requests.HTTPError):
         _locals['lb2'].config(text='')
         root.root.after(5000, lambda: reconnection(root, _locals))
+
+
+def change_profile_icon(root: Any, _locals: dict):
+    """
+    Изменение аватарки
+    """
+
+    dlg = filedialog.Open(filetypes=[
+        ('PNG file', '*.png'), ('JPG file', '*.jpg')
+    ])
+    file_path = dlg.show()  # Получаем выбранный файл
+    try:
+        icon = root.Image.open(file_path)
+        icon.save(root.Images.dp + 'profile_icon.png', 'png')
+        root.Images.IMG_PROFILE_ICON = root.open_img(
+            root.Images.dp + 'profile_icon.png', (46, 46), proportions=False
+        )
+        root.Images.IMG_PROFILE_ICON_SMALL = root.open_img(
+            root.Images.dp + 'profile_icon.png', (35, 35), proportions=False
+        )
+        root.home_view(need_resize=False, _locals=_locals)
+    except Exception:
+        pass
 
 
 def log_in(root: Any, _locals: dict, login: str, password: str):

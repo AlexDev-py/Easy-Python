@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import json
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -18,6 +19,7 @@ from PIL import ImageTk, Image
 from sources.quests.quests import Quests, Quest, Task
 from main import (
     log_in, sign_in, log_out, complete_quest, get_stats, reconnection,
+    change_profile_icon,
     USER_NAME, USER_ID, LOGIN, interface, AttrMap
 )
 
@@ -25,6 +27,19 @@ with open('settings.json') as settings:
     settings = AttrMap(json.load(settings))
 
 root = tk.Tk()
+# Данные о профиле {
+#     score: <int>,
+#     completed_tasks: {
+#         <название темы>: {
+#             completed_count: <int>,
+#             score: <int>,
+#             answers: {
+#                 <индекс задания>: <ответ пользователя>
+#                 ...
+#             }
+#         }
+#     }
+# }
 profile: AttrMap
 root.config(bg=settings.ROOT_BG)
 root.geometry('800x500')
@@ -387,6 +402,15 @@ class Images:
     IMG_OK = open_img(dp + 'ok.png', size=(10, 10))
     IMG_DARK_ZONE = open_img(dp + 'dark_zone.png', need_resize=False)
     IMG_YELLOW_ZONE = open_img(dp + 'yellow_zone.png', need_resize=False)
+    if os.path.exists(dp + 'profile_icon.png'):
+        IMG_PROFILE_ICON = open_img(
+            dp + 'profile_icon.png', (46, 46), proportions=False
+        )
+        IMG_PROFILE_ICON_SMALL = open_img(
+            dp + 'profile_icon.png', (35, 35), proportions=False
+        )
+    else:
+        IMG_PROFILE_ICON, IMG_PROFILE_ICON_SMALL = None, None
 
 
 @dataclass
@@ -685,7 +709,15 @@ def home_view(need_resize=True):
     canvas_profile.pack()
     frame_profile = tk.Frame(canvas_profile, bg=settings.SECONDARY_BG, bd=2)
     frame_profile_lbs = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
-    profile_icon = tk.Canvas(frame_profile, width=35, height=35, bg='#FFF')
+    profile_icon = tk.Canvas(
+        frame_profile, width=36, height=36, bg='#FFF', highlightthickness=1,
+        highlightbackground=settings.CONSP_BG
+    )
+    if Images.IMG_PROFILE_ICON_SMALL:
+        profile_icon.create_image(
+            (19, 18), image=Images.IMG_PROFILE_ICON_SMALL
+        )
+        profile_icon.config(bg=settings.SECONDARY_BG)
     profile_name = tk.Label(
         frame_profile_lbs, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
         font=settings.FONT, text=USER_NAME
@@ -710,15 +742,13 @@ def home_view(need_resize=True):
         canvas_profile.itemconfig(
             dark_zone, image=Images.IMG_DARK_ZONE_PROFILE
         )
+        rounded_rect(canvas_profile, 0, 0, width - 1, height - 1, 10)
 
     canvas_profile.bind('<Configure>', _create_dark_zone)
     frame_filters = tk.Frame(frame_tools, bg=settings.SECONDARY_BG)
     frame_filters.pack(fill=tk.Y)
-    frame_tools.pack(side=tk.LEFT, fill=tk.Y)
+    frame_tools.pack(side=tk.TOP, anchor=tk.NW)
     frame_content = tk.Frame(frame_main, bg=settings.ROOT_BG)
-    Alert.alert_frame = tk.Frame(frame_content, bg=settings.ROOT_BG)
-    Alert.alert_frame.pack(side='top', fill='x')
-    Alert.show('Подготовка...', show_time=1)
     frame_quests = ScrollableFrame(frame_content)
     _locals = locals()
     quest_widgets = [QuestWidget(
@@ -728,36 +758,6 @@ def home_view(need_resize=True):
     frame_quests.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_content.pack(fill=tk.BOTH, expand=tk.TRUE)
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE)
-
-    def root_configure_handler(_event):
-        """
-        Обработчик изменений в окне
-        """
-
-        if root.winfo_width() < 800 and len(USER_NAME) > 10:
-            profile_name.config(text=USER_NAME[:5].strip() + '...')
-        elif root.winfo_width() > 1200:
-            if len(USER_NAME) < 25:
-                profile_name.config(text=USER_NAME)
-            else:
-                profile_name.config(text=USER_NAME[:17].strip() + '...')
-        else:
-            if len(USER_NAME) < 15:
-                profile_name.config(text=USER_NAME)
-            else:
-                profile_name.config(text=USER_NAME[:12].strip() + '...')
-        if root.winfo_width() < 750:
-            for quest_widget in quest_widgets:
-                if len(quest_widget.quest.name) > 18:
-                    if space := quest_widget.quest.name.rfind(' '):
-                        text = list(quest_widget.quest.name)
-                        text[space] = '\n'
-                        quest_widget.name.config(text=''.join(text))
-        else:
-            for quest_widget in quest_widgets:
-                quest_widget.name.config(text=quest_widget.quest.name)
-
-    root.bind('<Configure>', root_configure_handler)
     frame_main.bind('<Destroy>', lambda event: root.unbind('<Configure>'))
     profile_name.bind(
         '<Button-1>', lambda event: profile_view(_locals=_locals)
@@ -1095,30 +1095,17 @@ def profile_view(need_resize=False):
         0, 0, image=Images.IMG_DARK_ZONE
     )
     frame_profile = tk.Frame(canvas_profile, bg=settings.SECONDARY_BG, bd=5)
-    profile_icon = tk.Canvas(frame_profile, width=45, height=45, bg='#FFF')
+    profile_icon = tk.Canvas(
+        frame_profile, width=46, height=46, bg='#FFF', highlightthickness=1,
+        highlightbackground=settings.CONSP_BG
+    )
+    if Images.IMG_PROFILE_ICON:
+        profile_icon.create_image((24, 23), image=Images.IMG_PROFILE_ICON)
+        profile_icon.config(bg=settings.SECONDARY_BG)
     frame_profile_info = tk.Frame(frame_profile, bg=settings.SECONDARY_BG)
-    # Форматируем логин пользователя для корректного отображения
-    if len(LOGIN) <= 15:
-        login = LOGIN
-    else:
-        if ' ' not in LOGIN:
-            login = LOGIN[:12] + '...'
-        else:
-            login = LOGIN.split()
-            login_begin = login[0]
-            del login[0]
-            if len(login_begin) <= 15:
-                for obj in login:
-                    if len(login_begin + obj) >= 15:
-                        break
-                    login_begin += ' ' + obj
-                    del login[0]
-            else:
-                login_begin = login_begin[:12] + '...'
-            login = login_begin + '\n' + ' '.join(login)
     profile_name = tk.Label(
         frame_profile_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
-        font=settings.FONT, text=login, justify=tk.LEFT
+        font=settings.FONT, text=LOGIN, justify=tk.LEFT
     )
     profile_score = tk.Label(
         frame_profile_info, bg=settings.SECONDARY_BG, fg=settings.ROOT_FG,
@@ -1251,6 +1238,9 @@ def profile_view(need_resize=False):
         need_resize=False, _locals=_locals
     ))
     btn_log_out.bind('<Button-1>', lambda event: log_out(interface, _locals))
+    profile_icon.bind('<Button-1>', lambda event: change_profile_icon(
+        interface, _locals
+    ))
 
 
 @view
