@@ -517,12 +517,14 @@ def view(func):
 
 
 @view
-def log_in_view(need_resize=False):
+def log_in_view(need_resize=False, need_prepare=True):
     """
     Страница авторизации.
     """
 
-    Alert.prepare()
+    if need_prepare:
+        root.minsize(620, 465)
+        Alert.prepare()
     root.geometry('620x465')
     if need_resize:
         root.resizable(False, False)
@@ -676,7 +678,9 @@ def sign_in_view(need_resize=False):
     frame_main.pack(fill=tk.BOTH, expand=tk.TRUE, pady=15)
     entry_login.focus()
     _locals = locals()
-    btn_log_in.bind('<Button-1>', lambda event: log_in_view(_locals=_locals))
+    btn_log_in.bind('<Button-1>', lambda event: log_in_view(
+        need_prepare=False, _locals=_locals
+    ))
     root.bind_all('<Return>', lambda event: sign_in(
         root=interface, _locals=_locals, login=entry_login.get(),
         password=entry_password.get(), password2=entry_password2.get()

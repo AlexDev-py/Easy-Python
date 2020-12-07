@@ -166,10 +166,7 @@ class Task:
                     if i < len(input_data):
                         self.code += f'"{input_data[i]}"'
 
-            try:
-                exec(self.code)
-            except Exception:
-                print(self.code)
+            exec(self.code)
             if isinstance(self.answer, str):
                 self.answer = self.answer.rstrip('\n')
 
