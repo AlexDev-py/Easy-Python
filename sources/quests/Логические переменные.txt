@@ -75,11 +75,3 @@ index::4
 >>> c = False
 >>> print(c + b + a)
 )::
-
-
-
-
-
-
-
-

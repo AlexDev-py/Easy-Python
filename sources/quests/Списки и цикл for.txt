@@ -1,0 +1,78 @@
+задач::10
+время::900
+index::11
+
+::(
+Что выведет данная программа?
+>>> s = [1, 2, 3]
+>>> line = ''
+>>> for el in s:
+...     line += str(el)
+>>> print(line)
+)::
+
+::(
+Что выведет данная программа?
+>>> s = []
+>>> for i in range(4):
+...     s.append(i)
+>>> print(s)
+)::
+
+::(
+Что выведет данная программа?
+>>> print([i for i in range(1, 11) if i % 2 == 0])
+)::
+
+::(
+Что выведет данная программа?
+>>> s = [i for i in range(10)]
+>>> print([x for x in s if x % 2 == 0])
+)::
+
+::(
+Что выведет данная программа?
+>>> s = [i for i in range(11)]
+>>> line = ''
+>>> for x in s[::2]:
+...     line += str(x)
+>>> print(line)
+)::
+
+::(
+Что выведет данная программа?
+::answer::<TypeError>::
+>>> s = [1, 2, 3]
+>>> for x in range(s):
+...     print(x)
+)::
+
+::(
+Что выведет данная программа?
+>>> s = [i for i in range(11) if i % 2 == 1]
+>>> for el in s:
+...     print(el * 2)
+)::
+
+::(
+Что выведет данная программа?
+>>> s = [i for i in range(11) if i % 2 == 1]
+>>> for el in s:
+...     print(str(el) * 2)
+)::
+
+::(
+Что выведет данная программа?
+>>> s = [i for i in range(5)]
+>>> for x in s:
+...     x *= 2
+...     print('x')
+)::
+
+::(
+Что выведет данная программа?
+::answer::<TypeError>::
+>>> s = [5, 2, 3, 1, 4]
+>>> z = [i for i in s.sort()]
+>>> print([i for i in range(1, 4)])
+)::
